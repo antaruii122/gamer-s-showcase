@@ -1,96 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Gaming Dark Theme */
+    --background: 240 20% 4%;
+    --foreground: 0 0% 100%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 240 25% 8%;
+    --card-foreground: 0 0% 100%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 240 25% 8%;
+    --popover-foreground: 0 0% 100%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Neon Cyan Primary */
+    --primary: 185 96% 46%;
+    --primary-foreground: 240 20% 4%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Neon Magenta Secondary */
+    --secondary: 340 100% 58%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Neon Green for prices */
+    --accent: 150 100% 50%;
+    --accent-foreground: 240 20% 4%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --muted: 240 15% 15%;
+    --muted-foreground: 240 10% 70%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 240 20% 20%;
+    --input: 240 20% 15%;
+    --ring: 185 96% 46%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Custom Gaming Variables */
+    --glow-cyan: 185 96% 46%;
+    --glow-magenta: 340 100% 58%;
+    --glow-green: 150 100% 50%;
+    --glass-bg: 240 25% 8% / 0.85;
+    --glass-border: 0 0% 100% / 0.1;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 240 20% 4%;
+    --foreground: 0 0% 100%;
+    --card: 240 25% 8%;
+    --card-foreground: 0 0% 100%;
+    --popover: 240 25% 8%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 185 96% 46%;
+    --primary-foreground: 240 20% 4%;
+    --secondary: 340 100% 58%;
+    --secondary-foreground: 0 0% 100%;
+    --accent: 150 100% 50%;
+    --accent-foreground: 240 20% 4%;
+    --muted: 240 15% 15%;
+    --muted-foreground: 240 10% 70%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 20% 20%;
+    --input: 240 20% 15%;
+    --ring: 185 96% 46%;
   }
 }
 
@@ -100,6 +77,193 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-rajdhani antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Glassmorphism Card */
+  .glass-card {
+    @apply relative overflow-hidden rounded-xl;
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--glass-border));
+  }
+
+  /* Neon Glow Effects */
+  .glow-cyan {
+    box-shadow: 
+      0 0 20px hsl(var(--glow-cyan) / 0.4),
+      0 0 40px hsl(var(--glow-cyan) / 0.2),
+      0 0 60px hsl(var(--glow-cyan) / 0.1);
+  }
+
+  .glow-magenta {
+    box-shadow: 
+      0 0 20px hsl(var(--glow-magenta) / 0.4),
+      0 0 40px hsl(var(--glow-magenta) / 0.2),
+      0 0 60px hsl(var(--glow-magenta) / 0.1);
+  }
+
+  .glow-green {
+    box-shadow: 
+      0 0 15px hsl(var(--glow-green) / 0.4),
+      0 0 30px hsl(var(--glow-green) / 0.2);
+  }
+
+  /* Text Glow */
+  .text-glow-cyan {
+    text-shadow: 
+      0 0 10px hsl(var(--glow-cyan) / 0.8),
+      0 0 20px hsl(var(--glow-cyan) / 0.4);
+  }
+
+  .text-glow-green {
+    text-shadow: 
+      0 0 10px hsl(var(--glow-green) / 0.8),
+      0 0 20px hsl(var(--glow-green) / 0.4);
+  }
+
+  /* Gradient Borders */
+  .border-gradient {
+    @apply relative;
+  }
+
+  .border-gradient::before {
+    content: '';
+    @apply absolute inset-0 rounded-xl p-[1px];
+    background: linear-gradient(
+      135deg,
+      hsl(var(--glow-cyan)),
+      hsl(var(--glow-magenta))
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* Gaming Button Styles */
+  .btn-gaming {
+    @apply relative overflow-hidden px-6 py-3 font-semibold uppercase tracking-wider;
+    @apply transition-all duration-300 ease-out;
+    @apply bg-primary/10 text-primary border border-primary/50;
+    @apply hover:bg-primary hover:text-primary-foreground;
+    @apply hover:shadow-[0_0_30px_hsl(var(--glow-cyan)/0.5)];
+  }
+
+  .btn-gaming-secondary {
+    @apply relative overflow-hidden px-6 py-3 font-semibold uppercase tracking-wider;
+    @apply transition-all duration-300 ease-out;
+    @apply bg-secondary/10 text-secondary border border-secondary/50;
+    @apply hover:bg-secondary hover:text-secondary-foreground;
+    @apply hover:shadow-[0_0_30px_hsl(var(--glow-magenta)/0.5)];
+  }
+
+  /* Category Chip */
+  .category-chip {
+    @apply px-5 py-2.5 rounded-full font-semibold text-sm uppercase tracking-wider;
+    @apply transition-all duration-300 ease-out cursor-pointer;
+    @apply bg-muted/50 text-muted-foreground border border-border;
+    @apply hover:border-primary/50 hover:text-primary hover:bg-primary/10;
+  }
+
+  .category-chip.active {
+    @apply bg-primary text-primary-foreground border-primary;
+    @apply shadow-[0_0_20px_hsl(var(--glow-cyan)/0.4)];
+  }
+
+  /* Price Tag */
+  .price-tag {
+    @apply text-accent font-bold text-2xl;
+    @apply text-glow-green;
+  }
+
+  /* Search Input */
+  .search-input {
+    @apply w-full px-5 py-3 rounded-full;
+    @apply bg-muted/50 border border-border;
+    @apply text-foreground placeholder:text-muted-foreground;
+    @apply focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20;
+    @apply transition-all duration-300;
+  }
+}
+
+@layer utilities {
+  /* Animations */
+  .animate-glow-pulse {
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% {
+      filter: brightness(1);
+    }
+    50% {
+      filter: brightness(1.2);
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  /* Scrollbar Styling */
+  .scrollbar-gaming::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-gaming::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 4px;
+  }
+
+  .scrollbar-gaming::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--glow-cyan)),
+      hsl(var(--glow-magenta))
+    );
+    border-radius: 4px;
+  }
+
+  .scrollbar-gaming::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary));
+  }
+}
+
+/* Swiper Custom Styles */
+.swiper-3d .swiper-slide-shadow-left,
+.swiper-3d .swiper-slide-shadow-right {
+  background-image: linear-gradient(
+    to right,
+    hsl(var(--glow-cyan) / 0.15),
+    transparent
+  ) !important;
+}
+
+.swiper-pagination-bullet {
+  background: hsl(var(--muted-foreground)) !important;
+  opacity: 0.5 !important;
+}
+
+.swiper-pagination-bullet-active {
+  background: hsl(var(--primary)) !important;
+  opacity: 1 !important;
+  box-shadow: 0 0 10px hsl(var(--glow-cyan) / 0.6) !important;
 }
