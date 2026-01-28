@@ -1,0 +1,564 @@
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCatalog } from "@/contexts/CatalogContext";
+import {
+  parseExcelFile,
+  autoDetectColumns,
+  convertToProducts,
+  imageToBase64,
+  compressImage,
+  ParseResult,
+  ColumnMapping,
+} from "@/utils/excelParser";
+import { Product } from "@/types/catalog";
+import {
+  Upload,
+  ArrowLeft,
+  FileSpreadsheet,
+  Check,
+  Image as ImageIcon,
+  X,
+  Loader2,
+} from "lucide-react";
+import ParticleBackground from "@/components/public/ParticleBackground";
+
+type Step = "upload" | "mapping" | "images" | "review";
+
+const UploadCatalog = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const { categories, addCatalog, addCategory } = useCatalog();
+
+  const [currentStep, setCurrentStep] = useState<Step>("upload");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Form state
+  const [catalogName, setCatalogName] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(categories[0] || "");
+  const [newCategory, setNewCategory] = useState("");
+
+  // Excel parsing state
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
+    modelo: null,
+    precioFOB: null,
+    descripcion: null,
+  });
+
+  // Products state
+  const [products, setProducts] = useState<Product[]>([]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Redirect if not authenticated
+  if (!isAuthenticated) {
+    navigate("/admin/login");
+    return null;
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const result = await parseExcelFile(file);
+      setParseResult(result);
+
+      // Auto-detect columns
+      const autoMapping = autoDetectColumns(result.columns);
+      setColumnMapping(autoMapping);
+
+      // Set catalog name from file name
+      setCatalogName(file.name.replace(/\.(xlsx|xls|csv)$/i, ""));
+
+      setCurrentStep("mapping");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al procesar archivo");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMappingComplete = () => {
+    if (!parseResult) return;
+
+    if (columnMapping.modelo === null) {
+      setError("Debes seleccionar la columna de Modelo");
+      return;
+    }
+
+    const convertedProducts = convertToProducts(
+      parseResult.rows,
+      columnMapping,
+      parseResult.images
+    );
+
+    if (convertedProducts.length === 0) {
+      setError("No se encontraron productos válidos");
+      return;
+    }
+
+    setProducts(convertedProducts);
+    setCurrentStep("images");
+  };
+
+  const handleImageUpload = async (
+    productId: string,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const base64 = await imageToBase64(file);
+      const compressed = await compressImage(base64);
+
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, image: compressed } : p))
+      );
+    } catch (err) {
+      console.error("Error uploading image:", err);
+    }
+  };
+
+  const handleRemoveImage = (productId: string) => {
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, image: undefined } : p))
+    );
+  };
+
+  const handleSaveCatalog = () => {
+    const category = newCategory.trim() || selectedCategory;
+
+    if (!catalogName.trim()) {
+      setError("El nombre del catálogo es requerido");
+      return;
+    }
+
+    if (!category) {
+      setError("Debes seleccionar o crear una categoría");
+      return;
+    }
+
+    // Add new category if needed
+    if (newCategory.trim()) {
+      addCategory(newCategory.trim());
+    }
+
+    // Save catalog
+    addCatalog({
+      name: catalogName.trim(),
+      category,
+      products,
+    });
+
+    navigate("/admin/dashboard");
+  };
+
+  const renderUploadStep = () => (
+    <div className="max-w-2xl mx-auto">
+      <div className="glass-card p-8 border-gradient">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/20 mb-4">
+            <FileSpreadsheet className="w-10 h-10 text-primary" />
+          </div>
+          <h2 className="text-2xl font-bold text-foreground mb-2">
+            Subir Archivo Excel
+          </h2>
+          <p className="text-muted-foreground">
+            Soportamos archivos .xlsx, .xls y .csv
+          </p>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isLoading}
+          className="w-full p-8 border-2 border-dashed border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
+        >
+          {isLoading ? (
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="w-12 h-12 text-primary animate-spin" />
+              <span className="text-muted-foreground">Procesando archivo...</span>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <Upload className="w-12 h-12 text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                Haz click o arrastra tu archivo aquí
+              </span>
+            </div>
+          )}
+        </button>
+
+        {error && (
+          <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderMappingStep = () => (
+    <div className="max-w-4xl mx-auto">
+      <div className="glass-card p-8">
+        <h2 className="text-2xl font-bold text-foreground mb-6">
+          Mapear Columnas
+        </h2>
+
+        {/* Catalog Details */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Nombre del Catálogo
+            </label>
+            <input
+              type="text"
+              value={catalogName}
+              onChange={(e) => setCatalogName(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+              placeholder="Ej: Gabinetes 2024"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Categoría
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={selectedCategory}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setNewCategory("");
+                }}
+                className="flex-1 px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+              >
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                placeholder="O crear nueva..."
+                className="flex-1 px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Column Mapping */}
+        <div className="space-y-4 mb-8">
+          <h3 className="text-lg font-semibold text-foreground">
+            Asignar Columnas
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Modelo */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Columna de Modelo *
+              </label>
+              <select
+                value={columnMapping.modelo ?? ""}
+                onChange={(e) =>
+                  setColumnMapping({
+                    ...columnMapping,
+                    modelo: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+                className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+              >
+                <option value="">Seleccionar...</option>
+                {parseResult?.columns.map((col) => (
+                  <option key={col.index} value={col.index}>
+                    {col.header}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Precio FOB */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Columna de Precio FOB
+              </label>
+              <select
+                value={columnMapping.precioFOB ?? ""}
+                onChange={(e) =>
+                  setColumnMapping({
+                    ...columnMapping,
+                    precioFOB: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+                className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+              >
+                <option value="">Seleccionar...</option>
+                {parseResult?.columns.map((col) => (
+                  <option key={col.index} value={col.index}>
+                    {col.header}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Descripción */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Columna de Descripción
+              </label>
+              <select
+                value={columnMapping.descripcion ?? ""}
+                onChange={(e) =>
+                  setColumnMapping({
+                    ...columnMapping,
+                    descripcion: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+                className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+              >
+                <option value="">Seleccionar...</option>
+                {parseResult?.columns.map((col) => (
+                  <option key={col.index} value={col.index}>
+                    {col.header}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Las columnas no asignadas se agregarán como especificaciones del producto.
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-between">
+          <button
+            onClick={() => setCurrentStep("upload")}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Atrás
+          </button>
+          <button onClick={handleMappingComplete} className="btn-gaming rounded-lg">
+            Continuar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderImagesStep = () => (
+    <div className="max-w-6xl mx-auto">
+      <div className="glass-card p-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-foreground">
+              Agregar Imágenes
+            </h2>
+            <p className="text-muted-foreground">
+              {products.length} productos encontrados
+            </p>
+          </div>
+          <button
+            onClick={() => setCurrentStep("review")}
+            className="btn-gaming rounded-lg"
+          >
+            Continuar sin Imágenes
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
+          {products.map((product) => (
+            <div key={product.id} className="glass-card p-4">
+              {/* Image Area */}
+              <div className="relative aspect-square mb-3 rounded-lg overflow-hidden bg-muted/30">
+                {product.image ? (
+                  <>
+                    <img
+                      src={product.image}
+                      alt={product.modelo}
+                      className="w-full h-full object-contain"
+                    />
+                    <button
+                      onClick={() => handleRemoveImage(product.id)}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-destructive text-destructive-foreground hover:scale-110 transition-transform"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:bg-muted/50 transition-colors">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
+                    <span className="text-xs text-muted-foreground">
+                      Agregar imagen
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(product.id, e)}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {/* Product Info */}
+              <h3 className="font-semibold text-foreground truncate text-sm">
+                {product.modelo}
+              </h3>
+              <p className="text-xs text-accent font-medium">{product.precioFOB}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-between">
+          <button
+            onClick={() => setCurrentStep("mapping")}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Atrás
+          </button>
+          <button
+            onClick={() => setCurrentStep("review")}
+            className="btn-gaming rounded-lg"
+          >
+            Revisar Catálogo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderReviewStep = () => (
+    <div className="max-w-4xl mx-auto">
+      <div className="glass-card p-8 border-gradient">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/20 mb-4">
+            <Check className="w-8 h-8 text-accent" />
+          </div>
+          <h2 className="text-2xl font-bold text-foreground mb-2">
+            Revisar y Guardar
+          </h2>
+        </div>
+
+        <div className="space-y-4 mb-8">
+          <div className="flex justify-between p-4 rounded-lg bg-muted/30">
+            <span className="text-muted-foreground">Nombre:</span>
+            <span className="font-semibold text-foreground">{catalogName}</span>
+          </div>
+          <div className="flex justify-between p-4 rounded-lg bg-muted/30">
+            <span className="text-muted-foreground">Categoría:</span>
+            <span className="font-semibold text-foreground">
+              {newCategory.trim() || selectedCategory}
+            </span>
+          </div>
+          <div className="flex justify-between p-4 rounded-lg bg-muted/30">
+            <span className="text-muted-foreground">Total Productos:</span>
+            <span className="font-semibold text-foreground">
+              {products.length}
+            </span>
+          </div>
+          <div className="flex justify-between p-4 rounded-lg bg-muted/30">
+            <span className="text-muted-foreground">Con Imagen:</span>
+            <span className="font-semibold text-foreground">
+              {products.filter((p) => p.image).length}
+            </span>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-between">
+          <button
+            onClick={() => setCurrentStep("images")}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Atrás
+          </button>
+          <button onClick={handleSaveCatalog} className="btn-gaming rounded-lg">
+            <Check className="w-5 h-5 mr-2 inline" />
+            Guardar Catálogo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen p-4 md:p-8">
+      <ParticleBackground />
+
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <header className="flex items-center gap-4 mb-8">
+          <button
+            onClick={() => navigate("/admin/dashboard")}
+            className="p-2 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              Subir Nuevo Catálogo
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Paso {currentStep === "upload" ? 1 : currentStep === "mapping" ? 2 : currentStep === "images" ? 3 : 4} de 4
+            </p>
+          </div>
+        </header>
+
+        {/* Progress Bar */}
+        <div className="flex gap-2 mb-8">
+          {["upload", "mapping", "images", "review"].map((step, i) => (
+            <div
+              key={step}
+              className={`flex-1 h-2 rounded-full transition-all ${
+                ["upload", "mapping", "images", "review"].indexOf(currentStep) >= i
+                  ? "bg-primary glow-cyan"
+                  : "bg-muted"
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Step Content */}
+        {currentStep === "upload" && renderUploadStep()}
+        {currentStep === "mapping" && renderMappingStep()}
+        {currentStep === "images" && renderImagesStep()}
+        {currentStep === "review" && renderReviewStep()}
+      </div>
+    </div>
+  );
+};
+
+export default UploadCatalog;
