@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Eye, EyeOff, Gamepad2 } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import ParticleBackground from "@/components/public/ParticleBackground";
+import esgamingLogo from "@/assets/esgaming-logo.png";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -45,12 +46,11 @@ const LoginPage = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-gaming glow-cyan mb-4">
-            <Gamepad2 className="w-8 h-8 text-background" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground">
-            Gaming<span className="text-primary">Catalog</span>
-          </h1>
+          <img 
+            src={esgamingLogo} 
+            alt="ESGaming" 
+            className="h-12 w-auto mx-auto mb-4 brightness-0 invert"
+          />
           <p className="text-muted-foreground mt-2">Panel de Administración</p>
         </div>
 
