@@ -4,22 +4,36 @@ import { getAdminSession, setAdminSession, clearAdminSession } from "@/utils/loc
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  loading: boolean;
   login: (email: string, password: string) => { success: boolean; error?: string };
   logout: () => void;
-  isLoading: boolean;
+  checkSession: () => boolean;
+  isLoading: boolean; // Alias for backward compatibility
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  const checkSession = (): boolean => {
+    const session = getAdminSession();
+    if (session?.loggedIn) {
+      setIsAuthenticated(true);
+      return true;
+    } else {
+      // Session expired or invalid - auto-logout
+      clearAdminSession();
+      setIsAuthenticated(false);
+      return false;
+    }
+  };
 
   useEffect(() => {
     // Check for existing session on mount
-    const session = getAdminSession();
-    setIsAuthenticated(session?.loggedIn ?? false);
-    setIsLoading(false);
+    checkSession();
+    setLoading(false);
   }, []);
 
   const login = (email: string, password: string) => {
@@ -28,7 +42,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsAuthenticated(true);
       return { success: true };
     }
-    return { success: false, error: "Credenciales inválidas" };
+    return { success: false, error: "Credenciales incorrectas" };
   };
 
   const logout = () => {
@@ -37,7 +51,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ 
+      isAuthenticated, 
+      loading, 
+      login, 
+      logout, 
+      checkSession,
+      isLoading: loading // Alias
+    }}>
       {children}
     </AuthContext.Provider>
   );
