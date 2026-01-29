@@ -143,8 +143,7 @@ const UploadCatalog = () => {
 
     const convertedProducts = convertToProducts(
       parseResult.rows,
-      columnMapping,
-      parseResult.images
+      columnMapping
     );
 
     if (convertedProducts.length === 0) {

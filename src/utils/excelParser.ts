@@ -32,15 +32,15 @@ const getCellValue = (cell: any): string => {
 export const parseExcelFile = async (file: File): Promise<ParseResult> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
+
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array", cellStyles: true });
-        
+
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        
+
         if (!worksheet) {
           reject(new Error("No se encontró hoja de cálculo"));
           return;
@@ -48,7 +48,7 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
 
         // Get the range
         const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
-        
+
         // Extract all rows
         const rows: any[][] = [];
         for (let r = range.s.r; r <= range.e.r; r++) {
@@ -81,19 +81,19 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
 
         // Try to extract images (limited support)
         const images: { row: number; col: number; dataUrl: string }[] = [];
-        
+
         resolve({ columns, rows, images });
       } catch (error) {
         reject(error);
       }
     };
-    
+
     reader.onerror = () => reject(new Error("Error al leer archivo"));
     reader.readAsArrayBuffer(file);
   });
 };
 
-// Auto-detect column mapping based on common Spanish headers
+// Auto-detect column mapping based on common headers
 export const autoDetectColumns = (columns: ParsedColumn[]): ColumnMapping => {
   const mapping: ColumnMapping = {
     modelo: null,
@@ -103,35 +103,42 @@ export const autoDetectColumns = (columns: ParsedColumn[]): ColumnMapping => {
 
   columns.forEach((col) => {
     const header = col.header.toLowerCase();
-    
+
     // Detect model column
     if (
       header.includes("modelo") ||
       header.includes("model") ||
       header.includes("sku") ||
       header.includes("código") ||
-      header.includes("codigo")
+      header.includes("codigo") ||
+      header.includes("id") ||
+      header.includes("item") ||
+      header.includes("part") ||
+      header.includes("producto")
     ) {
       if (mapping.modelo === null) mapping.modelo = col.index;
     }
-    
+
     // Detect price column
     if (
       header.includes("precio") ||
       header.includes("price") ||
       header.includes("fob") ||
       header.includes("usd") ||
+      header.includes("cost") ||
+      header.includes("valor") ||
       header.includes("$")
     ) {
       if (mapping.precioFOB === null) mapping.precioFOB = col.index;
     }
-    
+
     // Detect description column
     if (
       header.includes("descrip") ||
       header.includes("nombre") ||
       header.includes("name") ||
-      header.includes("detalle")
+      header.includes("detalle") ||
+      header.includes("spec")
     ) {
       if (mapping.descripcion === null) mapping.descripcion = col.index;
     }
@@ -143,23 +150,22 @@ export const autoDetectColumns = (columns: ParsedColumn[]): ColumnMapping => {
 // Convert parsed data to products
 export const convertToProducts = (
   rows: any[][],
-  mapping: ColumnMapping,
-  images: { row: number; col: number; dataUrl: string }[]
+  mapping: ColumnMapping
 ): Product[] => {
   const products: Product[] = [];
-  
+
   // Skip header row
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    
+
     // Get mapped values
     const modelo = mapping.modelo !== null ? String(row[mapping.modelo] || "") : "";
     const precioFOB = mapping.precioFOB !== null ? String(row[mapping.precioFOB] || "") : "";
     const descripcion = mapping.descripcion !== null ? String(row[mapping.descripcion] || "") : undefined;
-    
+
     // Skip rows without model
     if (!modelo.trim()) continue;
-    
+
     // Build specs from remaining columns
     const specs: Record<string, string> = {};
     row.forEach((value, colIndex) => {
@@ -174,33 +180,65 @@ export const convertToProducts = (
         specs[header] = String(value);
       }
     });
-    
-    // Find image for this row
-    const rowImage = images.find((img) => img.row === i);
-    
+
     products.push({
       id: generateId(),
       modelo: modelo.trim(),
       precioFOB: formatPrice(precioFOB),
       descripcion: descripcion?.trim(),
       specs,
-      image: rowImage?.dataUrl,
+      image: undefined, // Image extraction logic removed
     });
   }
-  
+
   return products;
 };
 
 // Format price to consistent format
 const formatPrice = (price: string): string => {
-  const cleaned = price.replace(/[^0-9.,]/g, "");
-  const number = parseFloat(cleaned.replace(",", "."));
-  
-  if (isNaN(number)) return price;
-  
+  // Return as-is if it's already in the desired format or empty
+  if (!price || price.startsWith("USD ")) return price;
+
+  let cleaned = price.toString().trim();
+
+  // Remove currency symbols and non-numeric chars except . , -
+  cleaned = cleaned.replace(/[^0-9.,-]/g, "");
+
+  // Heuristic for separators
+  if (cleaned.includes(".") && cleaned.includes(",")) {
+    // Both exist
+    if (cleaned.lastIndexOf(".") > cleaned.lastIndexOf(",")) {
+      // 1,234.56 -> remove commas
+      cleaned = cleaned.replace(/,/g, "");
+    } else {
+      // 1.234,56 -> remove dots, replace comma with dot
+      cleaned = cleaned.replace(/\./g, "").replace(/,/g, ".");
+    }
+  } else if (cleaned.includes(",")) {
+    // Only commas
+    if ((cleaned.match(/,/g) || []).length > 1) {
+      // Multiple commas: 1,000,000 -> remove
+      cleaned = cleaned.replace(/,/g, "");
+    } else {
+      // Single comma: 129,99 or 1,000
+      // Assume decimal separator for safety
+      cleaned = cleaned.replace(/,/g, ".");
+    }
+  } else if (cleaned.includes(".")) {
+    // Only dots
+    if ((cleaned.match(/\./g) || []).length > 1) {
+      // Multiple dots: 1.000.000 -> remove
+      cleaned = cleaned.replace(/\./g, "");
+    }
+    // Single dot -> Standard decimal, leave as is
+  }
+
+  const number = parseFloat(cleaned);
+
+  if (isNaN(number)) return price; // Return original if parsing failed
+
   return `USD ${number.toFixed(2)}`;
 };
-
 // Convert image file to base64
 export const imageToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -221,7 +259,7 @@ export const compressImage = async (
     img.onload = () => {
       const canvas = document.createElement("canvas");
       let { width, height } = img;
-      
+
       // Scale down if too large
       const maxDimension = 800;
       if (width > maxDimension || height > maxDimension) {
@@ -229,22 +267,22 @@ export const compressImage = async (
         width *= ratio;
         height *= ratio;
       }
-      
+
       canvas.width = width;
       canvas.height = height;
-      
+
       const ctx = canvas.getContext("2d");
       ctx?.drawImage(img, 0, 0, width, height);
-      
+
       // Try different quality levels
       let quality = 0.9;
       let result = canvas.toDataURL("image/jpeg", quality);
-      
+
       while (result.length > maxSizeKB * 1024 * 1.37 && quality > 0.1) {
         quality -= 0.1;
         result = canvas.toDataURL("image/jpeg", quality);
       }
-      
+
       resolve(result);
     };
     img.src = dataUrl;
