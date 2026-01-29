@@ -281,3 +281,44 @@
   opacity: 1 !important;
   box-shadow: 0 0 10px hsl(var(--glow-cyan) / 0.6) !important;
 }
+
+/* Ag-Grid Custom Theme Overrides */
+.ag-theme-quartz-dark {
+    /* Backgrounds */
+    --ag-background-color: hsl(var(--card));
+    --ag-foreground-color: hsl(var(--foreground));
+    --ag-header-background-color: hsl(var(--background));
+    
+    /* Headers */
+    --ag-header-foreground-color: hsl(var(--primary));
+    --ag-header-column-separator-display: block;
+    --ag-header-column-separator-color: hsl(var(--border));
+    
+    /* Borders & Rows */
+    --ag-border-color: hsl(var(--border));
+    --ag-row-border-color: hsl(var(--border));
+    --ag-odd-row-background-color: hsl(var(--muted) / 0.3);
+    
+    /* Selection */
+    --ag-selected-row-background-color: hsl(var(--primary) / 0.1);
+    --ag-row-hover-color: hsl(var(--primary) / 0.05);
+    
+    /* Inputs */
+    --ag-input-focus-border-color: hsl(var(--primary));
+    
+    /* Typography */
+    font-family: 'Rajdhani', sans-serif !important;
+    font-weight: 500;
+}
+
+.ag-theme-quartz-dark .ag-header-cell-label {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 10px hsl(var(--glow-cyan) / 0.3);
+}
+
+.ag-theme-quartz-dark .ag-cell {
+    display: flex;
+    align-items: center;
+}

@@ -38,7 +38,7 @@ const ExcelDataGrid = ({ products }: ExcelDataGridProps) => {
         // 1. Static Core Columns
         const coreCols: ColDef[] = [
             { field: "modelo", headerName: "Modelo", pinned: "left", filter: true, sortable: true, width: 200 },
-            { field: "precioFOB", headerName: "Precio Logo", filter: true, sortable: true, width: 120 },
+            { field: "precioFOB", headerName: "Precio FOB", filter: true, sortable: true, width: 120 },
             { field: "descripcion", headerName: "Descripción", filter: true, sortable: true, width: 250 },
         ];
 
