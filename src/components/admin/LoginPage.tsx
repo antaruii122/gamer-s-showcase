@@ -55,7 +55,7 @@ const LoginPage = () => {
         </div>
 
         {/* Login Form */}
-        <div className="glass-card p-8 border-gradient">
+        <div className="glass-card p-8 glow-cyan">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email */}
             <div>
@@ -111,7 +111,8 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full btn-gaming rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ transition: 'all 200ms ease-out' }}
+              className="w-full btn-gaming rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
