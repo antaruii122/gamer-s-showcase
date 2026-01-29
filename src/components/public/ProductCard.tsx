@@ -3,19 +3,25 @@ import { Package } from "lucide-react";
 
 interface ProductCardProps {
   product: Product;
+  isActive?: boolean;
 }
 
-const ProductCard = ({ product }: ProductCardProps) => {
+const ProductCard = ({ product, isActive = false }: ProductCardProps) => {
   const specEntries = Object.entries(product.specs).slice(0, 4);
 
   return (
-    <div className="glass-card p-6 h-full flex flex-col border-gradient group hover:glow-cyan transition-all duration-500">
+    <div
+      className={`glass-card p-6 h-full flex flex-col border-gradient transition-all duration-500
+        ${isActive ? 'glow-cyan scale-100 opacity-100 ring-2 ring-primary/50' : 'opacity-60 scale-95 hover:opacity-100 hover:scale-100'} 
+        group hover:glow-cyan`}
+    >
       {/* Image Container */}
       <div className="relative w-full aspect-square mb-4 rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center">
         {product.image ? (
           <img
             src={product.image}
             alt={product.modelo}
+            loading="lazy"
             className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
           />
         ) : (
@@ -24,7 +30,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
             <span className="text-sm">Sin imagen</span>
           </div>
         )}
-        
+
         {/* Glow overlay on hover */}
         <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       </div>

@@ -9,7 +9,13 @@ const CategoryNav = ({ activeCategory, onCategoryChange }: CategoryNavProps) => 
   const { categories } = useCatalog();
 
   return (
-    <div className="w-full overflow-x-auto scrollbar-hide">
+    <div
+      className="w-full overflow-x-auto scrollbar-hide"
+      style={{
+        scrollbarWidth: "none",
+        msOverflowStyle: "none"
+      }}
+    >
       <div className="flex flex-row gap-4 justify-center items-center px-4 py-6 min-w-max md:min-w-0">
         {categories.map((category) => {
           const isActive = activeCategory === category;

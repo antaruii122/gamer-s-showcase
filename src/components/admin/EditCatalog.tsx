@@ -11,9 +11,11 @@ import {
   Image as ImageIcon,
   X,
   Plus,
+  Settings2,
 } from "lucide-react";
 import ParticleBackground from "@/components/public/ParticleBackground";
 import { generateId } from "@/utils/localStorage";
+import { toast } from "sonner";
 
 const EditCatalog = () => {
   const navigate = useNavigate();
@@ -21,7 +23,6 @@ const EditCatalog = () => {
   const { isAuthenticated } = useAuth();
   const { catalogs, categories, updateCatalog, addCategory } = useCatalog();
 
-  const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [catalogName, setCatalogName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [newCategory, setNewCategory] = useState("");
@@ -29,15 +30,17 @@ const EditCatalog = () => {
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // State for managing specs editing mode per product
+  const [editingSpecsId, setEditingSpecsId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate("/admin/login");
       return;
     }
-    
+
     const found = catalogs.find((c) => c.id === catalogId);
     if (found) {
-      setCatalog(found);
       setCatalogName(found.name);
       setSelectedCategory(found.category);
       setProducts([...found.products]);
@@ -60,8 +63,10 @@ const EditCatalog = () => {
       setProducts((prev) =>
         prev.map((p) => (p.id === productId ? { ...p, image: compressed } : p))
       );
+      toast.success("Imagen actualizada");
     } catch (err) {
       console.error("Error uploading image:", err);
+      toast.error("Error al subir imagen");
     }
   };
 
@@ -83,6 +88,7 @@ const EditCatalog = () => {
       specs: {},
     };
     setProducts((prev) => [...prev, newProduct]);
+    toast.info("Producto agregado");
   };
 
   const handleUpdateProduct = (productId: string, updates: Partial<Product>) => {
@@ -91,20 +97,91 @@ const EditCatalog = () => {
     );
   };
 
+  const handleUpdateSpec = (productId: string, key: string, value: string) => {
+    setProducts(prev => prev.map(p => {
+      if (p.id === productId) {
+        return {
+          ...p,
+          specs: { ...p.specs, [key]: value }
+        };
+      }
+      return p;
+    }));
+  };
+
+  const handleAddSpec = (productId: string) => {
+    setProducts(prev => prev.map(p => {
+      if (p.id === productId) {
+        const newKey = `spec_${Object.keys(p.specs).length + 1}`;
+        return {
+          ...p,
+          specs: { ...p.specs, [newKey]: "Valor" }
+        };
+      }
+      return p;
+    }));
+  };
+
+  const handleRemoveSpec = (productId: string, keyToRemove: string) => {
+    setProducts(prev => prev.map(p => {
+      if (p.id === productId) {
+        const newSpecs = { ...p.specs };
+        delete newSpecs[keyToRemove];
+        return { ...p, specs: newSpecs };
+      }
+      return p;
+    }));
+  };
+
+  const handleRenameSpecKey = (productId: string, oldKey: string, newKey: string) => {
+    if (oldKey === newKey) return;
+    setProducts(prev => prev.map(p => {
+      if (p.id === productId) {
+        const specs = { ...p.specs };
+        const value = specs[oldKey];
+        delete specs[oldKey];
+        specs[newKey] = value;
+        return { ...p, specs };
+      }
+      return p;
+    }));
+  };
+
   const handleSave = () => {
     const category = newCategory.trim() || selectedCategory;
 
     if (!catalogName.trim()) {
       setError("El nombre del catálogo es requerido");
+      toast.error("El nombre del catálogo es requerido");
       return;
     }
 
     if (!category) {
       setError("Debes seleccionar o crear una categoría");
+      toast.error("Debes seleccionar una categoría");
+      return;
+    }
+
+    if (products.length === 0) {
+      setError("El catálogo debe tener al menos un producto");
+      toast.error("Agrega al menos un producto");
+      return;
+    }
+
+    // Validate prices
+    const invalidPrice = products.some(p => {
+      const price = p.precioFOB.toUpperCase();
+      return !price.includes("$") && !price.includes("USD");
+    });
+
+    if (invalidPrice) {
+      setError("Todos los precios deben incluir '$' o 'USD'");
+      toast.error("Formato de precio inválido", { description: "Debe incluir '$' o 'USD'" });
       return;
     }
 
     setIsSaving(true);
+    setError("");
 
     // Add new category if needed
     if (newCategory.trim()) {
@@ -118,16 +195,20 @@ const EditCatalog = () => {
       products,
     });
 
+    toast.success("Catálogo actualizado ✓");
+
     setTimeout(() => {
       setIsSaving(false);
       navigate("/admin/dashboard");
     }, 500);
   };
 
-  if (!catalog) {
+  // Ensure catalog data is loaded
+  if (!catalogName && products.length === 0 && !error) {
+    // Initial loading state or if not found handled in useEffect
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-muted-foreground">Cargando...</div>
+        <div className="text-muted-foreground animate-pulse">Cargando catálogo...</div>
       </div>
     );
   }
@@ -136,9 +217,9 @@ const EditCatalog = () => {
     <div className="min-h-screen p-4 md:p-8">
       <ParticleBackground />
 
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-6xl mx-auto relative z-10">
         {/* Header */}
-        <header className="flex items-center justify-between mb-8">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate("/admin/dashboard")}
@@ -156,18 +237,26 @@ const EditCatalog = () => {
             </div>
           </div>
 
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="btn-gaming rounded-lg flex items-center gap-2"
-          >
-            {isSaving ? (
-              <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Save className="w-5 h-5" />
-            )}
-            Guardar Cambios
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/admin/dashboard")}
+              className="px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors bg-transparent border border-transparent hover:border-border"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="btn-gaming rounded-lg flex items-center gap-2"
+            >
+              {isSaving ? (
+                <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Save className="w-5 h-5" />
+              )}
+              Guardar Cambios
+            </button>
+          </div>
         </header>
 
         {/* Catalog Details */}
@@ -175,19 +264,20 @@ const EditCatalog = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Nombre del Catálogo
+                Nombre del Catálogo *
               </label>
               <input
                 type="text"
                 value={catalogName}
                 onChange={(e) => setCatalogName(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+                placeholder="Ej: Nuevos Arribos"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Categoría
+                Categoría *
               </label>
               <div className="flex gap-2">
                 <select
@@ -216,7 +306,8 @@ const EditCatalog = () => {
           </div>
 
           {error && (
-            <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+            <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+              <X className="w-4 h-4" />
               {error}
             </div>
           )}
@@ -225,7 +316,7 @@ const EditCatalog = () => {
         {/* Products Grid */}
         <div className="glass-card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-foreground">Productos</h2>
+            <h2 className="text-lg font-semibold text-foreground">Productos ({products.length})</h2>
             <button
               onClick={handleAddProduct}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
@@ -237,66 +328,136 @@ const EditCatalog = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {products.map((product) => (
-              <div key={product.id} className="glass-card p-4 relative group">
+              <div key={product.id} className="glass-card p-4 relative group h-full flex flex-col">
                 {/* Delete Button */}
                 <button
                   onClick={() => handleRemoveProduct(product.id)}
-                  className="absolute -top-2 -right-2 p-1.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:scale-110 transition-all z-10"
+                  className="absolute -top-2 -right-2 p-1.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:scale-110 transition-all z-20 shadow-lg"
+                  title="Eliminar producto"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
 
-                {/* Image Area */}
-                <div className="relative aspect-square mb-3 rounded-lg overflow-hidden bg-muted/30">
-                  {product.image ? (
-                    <>
-                      <img
-                        src={product.image}
-                        alt={product.modelo}
-                        className="w-full h-full object-contain"
-                      />
-                      <button
-                        onClick={() => handleRemoveImage(product.id)}
-                        className="absolute top-2 right-2 p-1.5 rounded-full bg-destructive text-destructive-foreground hover:scale-110 transition-transform"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:bg-muted/50 transition-colors">
-                      <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
-                      <span className="text-xs text-muted-foreground">
-                        Agregar imagen
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleImageUpload(product.id, e)}
-                        className="hidden"
-                      />
-                    </label>
-                  )}
-                </div>
+                {/* Specs Toggle Button */}
+                <button
+                  onClick={() => setEditingSpecsId(editingSpecsId === product.id ? null : product.id)}
+                  className={`absolute top-2 left-2 p-1.5 rounded-lg transition-colors z-20 ${editingSpecsId === product.id ? 'bg-primary text-primary-foreground' : 'bg-black/40 text-white hover:bg-primary/80'}`}
+                  title="Editar especificaciones"
+                >
+                  <Settings2 className="w-4 h-4" />
+                </button>
 
-                {/* Editable Fields */}
-                <input
-                  type="text"
-                  value={product.modelo}
-                  onChange={(e) =>
-                    handleUpdateProduct(product.id, { modelo: e.target.value })
-                  }
-                  className="w-full px-2 py-1 rounded bg-muted/30 border border-transparent focus:border-primary text-foreground text-sm font-semibold mb-2 focus:outline-none"
-                  placeholder="Modelo"
-                />
-                <input
-                  type="text"
-                  value={product.precioFOB}
-                  onChange={(e) =>
-                    handleUpdateProduct(product.id, { precioFOB: e.target.value })
-                  }
-                  className="w-full px-2 py-1 rounded bg-muted/30 border border-transparent focus:border-primary text-accent text-sm font-medium focus:outline-none"
-                  placeholder="Precio FOB"
-                />
+                {editingSpecsId === product.id ? (
+                  // Specs Editor Mode
+                  <div className="flex-1 flex flex-col min-h-[250px] relative">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-primary">Especificaciones</span>
+                      <button
+                        onClick={() => handleAddSpec(product.id)}
+                        className="text-xs flex items-center gap-1 text-green-500 hover:text-green-400"
+                      >
+                        <Plus className="w-3 h-3" /> Add
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto space-y-2 max-h-[200px] pr-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                      {Object.entries(product.specs).map(([key, value]) => (
+                        <div key={key} className="flex gap-2 items-start bg-muted/20 p-1.5 rounded">
+                          <div className="flex-1 space-y-1">
+                            <input
+                              value={key}
+                              onChange={(e) => handleRenameSpecKey(product.id, key, e.target.value)}
+                              className="w-full text-xs bg-transparent border-b border-white/10 text-muted-foreground focus:text-foreground focus:border-primary focus:outline-none"
+                              placeholder="Clave"
+                            />
+                            <input
+                              value={value}
+                              onChange={(e) => handleUpdateSpec(product.id, key, e.target.value)}
+                              className="w-full text-xs bg-transparent text-foreground focus:bg-muted/10 rounded px-1 focus:outline-none"
+                              placeholder="Valor"
+                            />
+                          </div>
+                          <button
+                            onClick={() => handleRemoveSpec(product.id, key)}
+                            className="text-destructive hover:text-destructive/80 p-0.5"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {Object.keys(product.specs).length === 0 && (
+                        <div className="text-xs text-muted-foreground text-center py-4">Sin especificaciones</div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  // Normal Edit Mode
+                  <>
+                    <div className="relative aspect-square mb-3 rounded-lg overflow-hidden bg-muted/30">
+                      {product.image ? (
+                        <>
+                          <img
+                            src={product.image}
+                            alt={product.modelo}
+                            className="w-full h-full object-contain"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <label className="cursor-pointer p-2 rounded-full bg-primary text-primary-foreground hover:scale-110 transition-transform" title="Cambiar imagen">
+                              <ImageIcon className="w-4 h-4" />
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(product.id, e)}
+                                className="hidden"
+                              />
+                            </label>
+                            <button
+                              onClick={() => handleRemoveImage(product.id)}
+                              className="p-2 rounded-full bg-destructive text-destructive-foreground hover:scale-110 transition-transform"
+                              title="Eliminar imagen"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:bg-muted/50 transition-colors">
+                          <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
+                          <span className="text-xs text-muted-foreground">
+                            Agregar imagen
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(product.id, e)}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    <input
+                      type="text"
+                      value={product.modelo}
+                      onChange={(e) =>
+                        handleUpdateProduct(product.id, { modelo: e.target.value })
+                      }
+                      className="w-full px-2 py-1 rounded bg-muted/30 border border-transparent focus:border-primary text-foreground text-sm font-semibold mb-2 focus:outline-none"
+                      placeholder="Modelo"
+                    />
+                    <input
+                      type="text"
+                      value={product.precioFOB}
+                      onChange={(e) =>
+                        handleUpdateProduct(product.id, { precioFOB: e.target.value })
+                      }
+                      className="w-full px-2 py-1 rounded bg-muted/30 border border-transparent focus:border-primary text-accent text-sm font-medium focus:outline-none"
+                      placeholder="Precio FOB (e.g. USD 100)"
+                    />
+                    <div className="text-xs text-muted-foreground mt-2">
+                      {Object.keys(product.specs).length} especificaciones
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>

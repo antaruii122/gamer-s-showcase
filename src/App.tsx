@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,10 +9,12 @@ import { CatalogProvider } from "@/contexts/CatalogContext";
 import ProtectedRoute from "@/components/admin/ProtectedRoute";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import LoginPage from "./components/admin/LoginPage";
-import AdminDashboard from "./components/admin/AdminDashboard";
-import UploadCatalog from "./components/admin/UploadCatalog";
-import EditCatalog from "./components/admin/EditCatalog";
+
+// Lazy load admin components for better performance
+const LoginPage = lazy(() => import("./components/admin/LoginPage"));
+const AdminDashboard = lazy(() => import("./components/admin/AdminDashboard"));
+const UploadCatalog = lazy(() => import("./components/admin/UploadCatalog"));
+const EditCatalog = lazy(() => import("./components/admin/EditCatalog"));
 
 const queryClient = new QueryClient();
 
@@ -23,36 +26,44 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/admin/login" element={<LoginPage />} />
-              <Route 
-                path="/admin/dashboard" 
-                element={
-                  <ProtectedRoute>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/admin/upload" 
-                element={
-                  <ProtectedRoute>
-                    <UploadCatalog />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/admin/edit/:catalogId" 
-                element={
-                  <ProtectedRoute>
-                    <EditCatalog />
-                  </ProtectedRoute>
-                } 
-              />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center min-h-screen bg-[#0f0f1a] text-[#05d9e8]">
+                  Cargando aplicación...
+                </div>
+              }
+            >
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/admin/login" element={<LoginPage />} />
+                <Route
+                  path="/admin/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/upload"
+                  element={
+                    <ProtectedRoute>
+                      <UploadCatalog />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/edit/:catalogId"
+                  element={
+                    <ProtectedRoute>
+                      <EditCatalog />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </TooltipProvider>
       </CatalogProvider>

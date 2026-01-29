@@ -155,23 +155,52 @@ const UploadCatalog = () => {
     setCurrentStep("images");
   };
 
+  /* New Loading State for individual product image uploads */
+  const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
+
   const handleImageUpload = async (
     productId: string,
-    e: React.ChangeEvent<HTMLInputElement>
+    file: File
   ) => {
-    const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validate type
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      toast.error("Formato no válido", { description: "Solo JPG, PNG o WEBP" });
+      return;
+    }
+
+    // Validate size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Archivo muy grande", { description: "Máximo 2MB" });
+      return;
+    }
+
+    setUploadingImages(prev => ({ ...prev, [productId]: true }));
 
     try {
       const base64 = await imageToBase64(file);
-      const compressed = await compressImage(base64);
+      // Compress if larger than 500KB (approx check on base64 length)
+      const compressed = base64.length > 500 * 1024 * 1.33 ? await compressImage(base64) : base64;
 
       setProducts((prev) =>
         prev.map((p) => (p.id === productId ? { ...p, image: compressed } : p))
       );
+      toast.success("Imagen actualizada");
     } catch (err) {
       console.error("Error uploading image:", err);
+      toast.error("Error al procesar imagen");
+    } finally {
+      setUploadingImages(prev => ({ ...prev, [productId]: false }));
     }
+  };
+
+  const handleImageDrop = (productId: string, e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleImageUpload(productId, file);
   };
 
   const handleRemoveImage = (productId: string) => {
@@ -301,7 +330,7 @@ const UploadCatalog = () => {
           onClick={() => fileInputRef.current?.click()}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
-          className="w-full h-[300px] border-2 border-dashed border-cyan-500/50 rounded-xl hover:border-cyan-500 hover:bg-cyan-500/5 transition-all cursor-pointer group flex items-center justify-center"
+          className="w-full h-[300px] border-2 border-dashed border-cyan-500/50 rounded-xl hover:border-cyan-500 hover:bg-cyan-500/50 transition-all cursor-pointer group flex items-center justify-center"
           style={{ minHeight: "300px" }}
         >
           {isLoading ? (
@@ -553,22 +582,34 @@ const UploadCatalog = () => {
               Agregar Imágenes
             </h2>
             <p className="text-muted-foreground">
-              {products.length} productos encontrados
+              {products.length} productos encontrados. Arrastra imágenes o haz clic para subir.
             </p>
           </div>
           <button
             onClick={() => setCurrentStep("review")}
             className="btn-gaming rounded-lg"
           >
-            Continuar sin Imágenes
+            Continuar
           </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
           {products.map((product) => (
-            <div key={product.id} className="glass-card p-4">
+            <div
+              key={product.id}
+              className="glass-card p-4 relative group"
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => handleImageDrop(product.id, e)}
+            >
               {/* Image Area */}
-              <div className="relative aspect-square mb-3 rounded-lg overflow-hidden bg-muted/30">
+              <div className="relative aspect-square mb-3 rounded-lg overflow-hidden bg-muted/30 border-2 border-transparent hover:border-primary/50 transition-colors">
+                {uploadingImages[product.id] ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    <span className="text-xs text-white mt-2">Procesando...</span>
+                  </div>
+                ) : null}
+
                 {product.image ? (
                   <>
                     <img
@@ -576,23 +617,38 @@ const UploadCatalog = () => {
                       alt={product.modelo}
                       className="w-full h-full object-contain"
                     />
-                    <button
-                      onClick={() => handleRemoveImage(product.id)}
-                      className="absolute top-2 right-2 p-1.5 rounded-full bg-destructive text-destructive-foreground hover:scale-110 transition-transform"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <label className="cursor-pointer p-2 rounded-full bg-primary text-primary-foreground hover:scale-110 transition-transform" title="Cambiar imagen">
+                        <ImageIcon className="w-4 h-4" />
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={(e) => e.target.files?.[0] && handleImageUpload(product.id, e.target.files[0])}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        onClick={() => handleRemoveImage(product.id)}
+                        className="p-2 rounded-full bg-destructive text-destructive-foreground hover:scale-110 transition-transform"
+                        title="Eliminar imagen"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:bg-muted/50 transition-colors">
-                    <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
-                    <span className="text-xs text-muted-foreground">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground mb-2 group-hover:text-primary transition-colors" />
+                    <span className="text-xs text-muted-foreground group-hover:text-foreground">
                       Agregar imagen
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/50 mt-1">
+                      (o arrastra aquí)
                     </span>
                     <input
                       type="file"
-                      accept="image/*"
-                      onChange={(e) => handleImageUpload(product.id, e)}
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(e) => e.target.files?.[0] && handleImageUpload(product.id, e.target.files[0])}
                       className="hidden"
                     />
                   </label>
@@ -600,7 +656,7 @@ const UploadCatalog = () => {
               </div>
 
               {/* Product Info */}
-              <h3 className="font-semibold text-foreground truncate text-sm">
+              <h3 className="font-semibold text-foreground truncate text-sm" title={product.modelo}>
                 {product.modelo}
               </h3>
               <p className="text-xs text-accent font-medium">{product.precioFOB}</p>
@@ -703,9 +759,8 @@ const UploadCatalog = () => {
 
   return (
     <div className="min-h-screen p-4 md:p-8">
-      <ParticleBackground />
 
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-6xl mx-auto relative z-10">
         {/* Header */}
         <header className="flex items-center gap-4 mb-8">
           <button

@@ -14,6 +14,10 @@ const ParticleBackground = () => {
       await loadSlim(engine);
     }).then(() => {
       setInit(true);
+    }).catch((e) => {
+      console.error("Failed to init particles:", e);
+      // We can just leave init as false, and it will render nothing (transparent background) or fallback
+      // The component handles !init by returning null, which is fine as valid safe degradation.
     });
   }, []);
 
@@ -38,6 +42,10 @@ const ParticleBackground = () => {
   // Memoize particle options to avoid re-rendering
   const options: ISourceOptions = useMemo(
     () => ({
+      fullScreen: {
+        enable: false,
+        zIndex: -1
+      },
       background: {
         color: {
           value: "transparent",
@@ -134,16 +142,25 @@ const ParticleBackground = () => {
     );
   }
 
-  // Don't render until particles engine is initialized
+  // Don't render until particles engine is initialized, show static background as fallback
   if (!init) {
-    return null;
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          background: "linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 100%)",
+          zIndex: -1,
+        }}
+      />
+    );
   }
 
   return (
-    <Particles
-      id="tsparticles"
-      particlesLoaded={particlesLoaded}
-      options={options}
+    <div
       style={{
         position: "fixed",
         top: 0,
@@ -151,8 +168,16 @@ const ParticleBackground = () => {
         width: "100%",
         height: "100%",
         zIndex: -1,
+        pointerEvents: "none", // Ensure particles don't block clicks
       }}
-    />
+    >
+      <Particles
+        id="tsparticles"
+        particlesLoaded={particlesLoaded}
+        options={options}
+        className="w-full h-full"
+      />
+    </div>
   );
 };
 
