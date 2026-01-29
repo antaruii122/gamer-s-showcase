@@ -22,6 +22,7 @@ import {
   Loader2,
 } from "lucide-react";
 import ParticleBackground from "@/components/public/ParticleBackground";
+import { toast } from "sonner";
 
 type Step = "upload" | "mapping" | "images" | "review";
 
@@ -32,7 +33,9 @@ const UploadCatalog = () => {
 
   const [currentStep, setCurrentStep] = useState<Step>("upload");
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [uploadedFileName, setUploadedFileName] = useState("");
 
   // Form state
   const [catalogName, setCatalogName] = useState("");
@@ -96,6 +99,7 @@ const UploadCatalog = () => {
       }
 
       setParseResult(result);
+      setUploadedFileName(file.name);
 
       // Auto-detect columns
       const autoMapping = autoDetectColumns(result.columns);
@@ -190,19 +194,54 @@ const UploadCatalog = () => {
       return;
     }
 
-    // Add new category if needed
-    if (newCategory.trim()) {
-      addCategory(newCategory.trim());
+    // Validate products exist
+    if (products.length === 0) {
+      setError("No se encontraron productos en el archivo");
+      return;
     }
 
-    // Save catalog
-    addCatalog({
-      name: catalogName.trim(),
-      category,
-      products,
-    });
+    setIsSaving(true);
+    setError("");
 
-    navigate("/admin/dashboard");
+    try {
+      // Add new category if needed
+      if (newCategory.trim()) {
+        addCategory(newCategory.trim());
+      }
+
+      // Save catalog to CatalogContext
+      addCatalog({
+        name: catalogName.trim(),
+        category,
+        products,
+      });
+
+      // Show success toast
+      toast.success("Catálogo subido correctamente ✓", {
+        description: `${products.length} productos agregados`,
+        duration: 3000,
+      });
+
+      // Redirect to dashboard
+      setTimeout(() => {
+        navigate("/admin/dashboard");
+      }, 500);
+    } catch (err) {
+      // Handle localStorage quota exceeded
+      if (err instanceof Error && err.name === "QuotaExceededError") {
+        setError("Almacenamiento lleno - Elimina catálogos antiguos");
+        toast.error("Almacenamiento lleno", {
+          description: "Elimina catálogos antiguos para liberar espacio",
+        });
+      } else {
+        setError("Error al guardar el catálogo");
+        toast.error("Error al guardar", {
+          description: err instanceof Error ? err.message : "Error desconocido",
+        });
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const renderUploadStep = () => (
@@ -298,212 +337,212 @@ const UploadCatalog = () => {
     const isAutoDetected = columnMapping.modelo !== null || columnMapping.precioFOB !== null;
 
     return (
-    <div className="max-w-4xl mx-auto">
-      <div className="glass-card p-8">
-        <h2 className="text-2xl font-bold text-foreground mb-6">
-          Mapear Columnas
-        </h2>
+      <div className="max-w-4xl mx-auto">
+        <div className="glass-card p-8">
+          <h2 className="text-2xl font-bold text-foreground mb-6">
+            Mapear Columnas
+          </h2>
 
-        {/* Catalog Details */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Nombre del Catálogo
-            </label>
-            <input
-              type="text"
-              value={catalogName}
-              onChange={(e) => setCatalogName(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
-              placeholder="Ej: Gabinetes 2024"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Categoría
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={selectedCategory}
-                onChange={(e) => {
-                  setSelectedCategory(e.target.value);
-                  setNewCategory("");
-                }}
-                className="flex-1 px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
-              >
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
+          {/* Catalog Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Nombre del Catálogo
+              </label>
               <input
                 type="text"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                placeholder="O crear nueva..."
-                className="flex-1 px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+                value={catalogName}
+                onChange={(e) => setCatalogName(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+                placeholder="Ej: Gabinetes 2024"
               />
             </div>
-          </div>
-        </div>
 
-        {/* Auto-detection Status */}
-        {isAutoDetected && (
-          <div className="mb-6 p-4 rounded-lg bg-accent/10 border border-accent/20 flex items-center gap-3">
-            <Check className="w-5 h-5 text-accent" />
-            <span className="text-accent font-medium">
-              Columnas detectadas correctamente ✓
-            </span>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Categoría
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => {
+                    setSelectedCategory(e.target.value);
+                    setNewCategory("");
+                  }}
+                  className="flex-1 px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+                >
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="O crear nueva..."
+                  className="flex-1 px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+                />
+              </div>
+            </div>
           </div>
-        )}
 
-        {/* Preview Table - First 5 Rows */}
-        {parseResult && parseResult.rows.length > 0 && (
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold text-foreground mb-4">
-              Vista Previa (Primeras 5 filas)
-            </h3>
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    {parseResult.columns.map((col) => (
-                      <th
-                        key={col.index}
-                        className="px-4 py-3 text-left font-semibold text-foreground border-b border-border"
-                      >
-                        {col.header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {parseResult.rows.slice(1, 6).map((row, rowIndex) => (
-                    <tr key={rowIndex} className="hover:bg-muted/30 transition-colors">
-                      {row.map((cell, cellIndex) => (
-                        <td
-                          key={cellIndex}
-                          className="px-4 py-3 text-muted-foreground border-b border-border/50"
+          {/* Auto-detection Status */}
+          {isAutoDetected && (
+            <div className="mb-6 p-4 rounded-lg bg-accent/10 border border-accent/20 flex items-center gap-3">
+              <Check className="w-5 h-5 text-accent" />
+              <span className="text-accent font-medium">
+                Columnas detectadas correctamente ✓
+              </span>
+            </div>
+          )}
+
+          {/* Preview Table - First 5 Rows */}
+          {parseResult && parseResult.rows.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-foreground mb-4">
+                Vista Previa (Primeras 5 filas)
+              </h3>
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      {parseResult.columns.map((col) => (
+                        <th
+                          key={col.index}
+                          className="px-4 py-3 text-left font-semibold text-foreground border-b border-border"
                         >
-                          {String(cell || "")}
-                        </td>
+                          {col.header}
+                        </th>
                       ))}
                     </tr>
+                  </thead>
+                  <tbody>
+                    {parseResult.rows.slice(1, 6).map((row, rowIndex) => (
+                      <tr key={rowIndex} className="hover:bg-muted/30 transition-colors">
+                        {row.map((cell, cellIndex) => (
+                          <td
+                            key={cellIndex}
+                            className="px-4 py-3 text-muted-foreground border-b border-border/50"
+                          >
+                            {String(cell || "")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Column Mapping */}
+          <div className="space-y-4 mb-8">
+            <h3 className="text-lg font-semibold text-foreground">
+              Asignar Columnas
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Modelo */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Columna de Modelo *
+                </label>
+                <select
+                  value={columnMapping.modelo ?? ""}
+                  onChange={(e) =>
+                    setColumnMapping({
+                      ...columnMapping,
+                      modelo: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                  className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+                >
+                  <option value="">Seleccionar...</option>
+                  {parseResult?.columns.map((col) => (
+                    <option key={col.index} value={col.index}>
+                      {col.header}
+                    </option>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                </select>
+              </div>
 
-        {/* Column Mapping */}
-        <div className="space-y-4 mb-8">
-          <h3 className="text-lg font-semibold text-foreground">
-            Asignar Columnas
-          </h3>
+              {/* Precio FOB */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Columna de Precio FOB
+                </label>
+                <select
+                  value={columnMapping.precioFOB ?? ""}
+                  onChange={(e) =>
+                    setColumnMapping({
+                      ...columnMapping,
+                      precioFOB: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                  className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+                >
+                  <option value="">Seleccionar...</option>
+                  {parseResult?.columns.map((col) => (
+                    <option key={col.index} value={col.index}>
+                      {col.header}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Modelo */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Columna de Modelo *
-              </label>
-              <select
-                value={columnMapping.modelo ?? ""}
-                onChange={(e) =>
-                  setColumnMapping({
-                    ...columnMapping,
-                    modelo: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-                className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
-              >
-                <option value="">Seleccionar...</option>
-                {parseResult?.columns.map((col) => (
-                  <option key={col.index} value={col.index}>
-                    {col.header}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Precio FOB */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Columna de Precio FOB
-              </label>
-              <select
-                value={columnMapping.precioFOB ?? ""}
-                onChange={(e) =>
-                  setColumnMapping({
-                    ...columnMapping,
-                    precioFOB: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-                className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
-              >
-                <option value="">Seleccionar...</option>
-                {parseResult?.columns.map((col) => (
-                  <option key={col.index} value={col.index}>
-                    {col.header}
-                  </option>
-                ))}
-              </select>
+              {/* Descripción */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Columna de Descripción
+                </label>
+                <select
+                  value={columnMapping.descripcion ?? ""}
+                  onChange={(e) =>
+                    setColumnMapping({
+                      ...columnMapping,
+                      descripcion: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                  className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+                >
+                  <option value="">Seleccionar...</option>
+                  {parseResult?.columns.map((col) => (
+                    <option key={col.index} value={col.index}>
+                      {col.header}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Descripción */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Columna de Descripción
-              </label>
-              <select
-                value={columnMapping.descripcion ?? ""}
-                onChange={(e) =>
-                  setColumnMapping({
-                    ...columnMapping,
-                    descripcion: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-                className="w-full px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
-              >
-                <option value="">Seleccionar...</option>
-                {parseResult?.columns.map((col) => (
-                  <option key={col.index} value={col.index}>
-                    {col.header}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Las columnas no asignadas se agregarán como especificaciones del producto.
+            </p>
           </div>
 
-          <p className="text-sm text-muted-foreground">
-            Las columnas no asignadas se agregarán como especificaciones del producto.
-          </p>
-        </div>
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+              {error}
+            </div>
+          )}
 
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-            {error}
+          <div className="flex justify-between">
+            <button
+              onClick={() => setCurrentStep("upload")}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Atrás
+            </button>
+            <button onClick={handleMappingComplete} className="btn-gaming rounded-lg">
+              Continuar
+            </button>
           </div>
-        )}
-
-        <div className="flex justify-between">
-          <button
-            onClick={() => setCurrentStep("upload")}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Atrás
-          </button>
-          <button onClick={handleMappingComplete} className="btn-gaming rounded-lg">
-            Continuar
-          </button>
         </div>
       </div>
-    </div>
-  );
+    );
   };
 
   const renderImagesStep = () => (
@@ -635,14 +674,28 @@ const UploadCatalog = () => {
         <div className="flex justify-between">
           <button
             onClick={() => setCurrentStep("images")}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+            disabled={isSaving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ArrowLeft className="w-4 h-4" />
             Atrás
           </button>
-          <button onClick={handleSaveCatalog} className="btn-gaming rounded-lg">
-            <Check className="w-5 h-5 mr-2 inline" />
-            Guardar Catálogo
+          <button
+            onClick={handleSaveCatalog}
+            disabled={isSaving}
+            className="btn-gaming rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 inline animate-spin" />
+                Guardando...
+              </>
+            ) : (
+              <>
+                <Check className="w-5 h-5 mr-2 inline" />
+                Guardar Catálogo
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -677,11 +730,10 @@ const UploadCatalog = () => {
           {["upload", "mapping", "images", "review"].map((step, i) => (
             <div
               key={step}
-              className={`flex-1 h-2 rounded-full transition-all ${
-                ["upload", "mapping", "images", "review"].indexOf(currentStep) >= i
-                  ? "bg-primary glow-cyan"
-                  : "bg-muted"
-              }`}
+              className={`flex-1 h-2 rounded-full transition-all ${["upload", "mapping", "images", "review"].indexOf(currentStep) >= i
+                ? "bg-primary glow-cyan"
+                : "bg-muted"
+                }`}
             />
           ))}
         </div>
