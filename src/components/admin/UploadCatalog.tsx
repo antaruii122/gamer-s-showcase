@@ -58,15 +58,43 @@ const UploadCatalog = () => {
     return null;
   }
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleFileUpload = async (file: File) => {
     setIsLoading(true);
     setError("");
 
     try {
+      // Validate file type
+      const validTypes = [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+        "application/vnd.ms-excel", // .xls
+        "text/csv", // .csv
+      ];
+      const validExtensions = [".xlsx", ".xls", ".csv"];
+      const fileExtension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
+
+      if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension || "")) {
+        setError("Formato de archivo no válido. Solo se permiten archivos .xlsx, .xls y .csv");
+        setIsLoading(false);
+        return;
+      }
+
+      // Validate file size (10MB = 10 * 1024 * 1024 bytes)
+      const maxSize = 10 * 1024 * 1024;
+      if (file.size > maxSize) {
+        setError("El archivo es demasiado grande. El tamaño máximo es 10MB");
+        setIsLoading(false);
+        return;
+      }
+
       const result = await parseExcelFile(file);
+
+      // Validate minimum columns
+      if (result.columns.length < 2) {
+        setError("El archivo debe tener al menos 2 columnas");
+        setIsLoading(false);
+        return;
+      }
+
       setParseResult(result);
 
       // Auto-detect columns
@@ -82,6 +110,23 @@ const UploadCatalog = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUpload(file);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileUpload(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   const handleMappingComplete = () => {
@@ -161,7 +206,7 @@ const UploadCatalog = () => {
   };
 
   const renderUploadStep = () => (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-3xl mx-auto">
       <div className="glass-card p-8 border-gradient">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/20 mb-4">
@@ -171,37 +216,73 @@ const UploadCatalog = () => {
             Subir Archivo Excel
           </h2>
           <p className="text-muted-foreground">
-            Soportamos archivos .xlsx, .xls y .csv
+            Soportamos archivos .xlsx, .xls y .csv (máximo 10MB)
           </p>
+        </div>
+
+        {/* Category Selector */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Categoría *
+          </label>
+          <div className="flex gap-2">
+            <select
+              value={selectedCategory}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
+                setNewCategory("");
+              }}
+              className="flex-1 px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              placeholder="Agregar nueva categoría..."
+              className="flex-1 px-4 py-3 rounded-lg bg-muted/50 border border-border text-foreground focus:outline-none focus:border-primary transition-all"
+            />
+          </div>
         </div>
 
         <input
           ref={fileInputRef}
           type="file"
           accept=".xlsx,.xls,.csv"
-          onChange={handleFileUpload}
+          onChange={handleFileInputChange}
           className="hidden"
         />
 
-        <button
+        {/* Drag and Drop Zone */}
+        <div
           onClick={() => fileInputRef.current?.click()}
-          disabled={isLoading}
-          className="w-full p-8 border-2 border-dashed border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          className="w-full h-[300px] border-2 border-dashed border-cyan-500/50 rounded-xl hover:border-cyan-500 hover:bg-cyan-500/5 transition-all cursor-pointer group flex items-center justify-center"
+          style={{ minHeight: "300px" }}
         >
           {isLoading ? (
             <div className="flex flex-col items-center gap-3">
-              <Loader2 className="w-12 h-12 text-primary animate-spin" />
+              <Loader2 className="w-12 h-12 text-cyan-500 animate-spin" />
               <span className="text-muted-foreground">Procesando archivo...</span>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-3">
-              <Upload className="w-12 h-12 text-muted-foreground group-hover:text-primary transition-colors" />
-              <span className="text-muted-foreground group-hover:text-foreground transition-colors">
-                Haz click o arrastra tu archivo aquí
+            <div className="flex flex-col items-center gap-3 px-4">
+              <Upload className="w-16 h-16 text-cyan-500/70 group-hover:text-cyan-500 transition-colors" />
+              <span className="text-center text-muted-foreground group-hover:text-foreground transition-colors text-lg">
+                Arrastra tu archivo Excel aquí o haz clic para seleccionar
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Formatos soportados: .xlsx, .xls, .csv
               </span>
             </div>
           )}
-        </button>
+        </div>
 
         {error && (
           <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
@@ -212,7 +293,11 @@ const UploadCatalog = () => {
     </div>
   );
 
-  const renderMappingStep = () => (
+  const renderMappingStep = () => {
+    // Check if columns were auto-detected successfully
+    const isAutoDetected = columnMapping.modelo !== null || columnMapping.precioFOB !== null;
+
+    return (
     <div className="max-w-4xl mx-auto">
       <div className="glass-card p-8">
         <h2 className="text-2xl font-bold text-foreground mb-6">
@@ -263,6 +348,55 @@ const UploadCatalog = () => {
             </div>
           </div>
         </div>
+
+        {/* Auto-detection Status */}
+        {isAutoDetected && (
+          <div className="mb-6 p-4 rounded-lg bg-accent/10 border border-accent/20 flex items-center gap-3">
+            <Check className="w-5 h-5 text-accent" />
+            <span className="text-accent font-medium">
+              Columnas detectadas correctamente ✓
+            </span>
+          </div>
+        )}
+
+        {/* Preview Table - First 5 Rows */}
+        {parseResult && parseResult.rows.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-foreground mb-4">
+              Vista Previa (Primeras 5 filas)
+            </h3>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    {parseResult.columns.map((col) => (
+                      <th
+                        key={col.index}
+                        className="px-4 py-3 text-left font-semibold text-foreground border-b border-border"
+                      >
+                        {col.header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {parseResult.rows.slice(1, 6).map((row, rowIndex) => (
+                    <tr key={rowIndex} className="hover:bg-muted/30 transition-colors">
+                      {row.map((cell, cellIndex) => (
+                        <td
+                          key={cellIndex}
+                          className="px-4 py-3 text-muted-foreground border-b border-border/50"
+                        >
+                          {String(cell || "")}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Column Mapping */}
         <div className="space-y-4 mb-8">
@@ -370,6 +504,7 @@ const UploadCatalog = () => {
       </div>
     </div>
   );
+  };
 
   const renderImagesStep = () => (
     <div className="max-w-6xl mx-auto">
