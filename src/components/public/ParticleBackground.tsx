@@ -1,102 +1,157 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
-import type { Container, ISourceOptions } from "@tsparticles/engine";
+import type { Engine, ISourceOptions } from "@tsparticles/engine";
 
 const ParticleBackground = () => {
   const [init, setInit] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isVerySmall, setIsVerySmall] = useState(false);
 
+  // Initialize particles engine
   useEffect(() => {
-    initParticlesEngine(async (engine) => {
+    initParticlesEngine(async (engine: Engine) => {
       await loadSlim(engine);
     }).then(() => {
       setInit(true);
     });
   }, []);
 
-  const particlesLoaded = useCallback(async (container: Container | undefined) => {
-    console.log("Particles loaded", container);
+  // Detect screen size and update particle count
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsVerySmall(width < 400);
+      setIsMobile(width < 768);
+    };
+
+    // Initial check
+    handleResize();
+
+    // Add event listener
+    window.addEventListener("resize", handleResize);
+
+    // Cleanup
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const options: ISourceOptions = {
-    background: {
-      color: {
-        value: "transparent",
+  // Memoize particle options to avoid re-rendering
+  const options: ISourceOptions = useMemo(
+    () => ({
+      background: {
+        color: {
+          value: "transparent",
+        },
       },
-    },
-    fpsLimit: 60,
-    interactivity: {
-      events: {
-        onHover: {
+      fpsLimit: 60,
+      interactivity: {
+        events: {
+          onClick: {
+            enable: true,
+            mode: "push",
+          },
+          onHover: {
+            enable: true,
+            mode: "repulse",
+          },
+        },
+        modes: {
+          push: {
+            quantity: 3,
+          },
+          repulse: {
+            distance: 100,
+            duration: 0.4,
+          },
+        },
+      },
+      particles: {
+        color: {
+          value: ["#05d9e8", "#ff2a6d"],
+        },
+        move: {
+          direction: "none",
           enable: true,
-          mode: "repulse",
+          outModes: {
+            default: "bounce",
+          },
+          random: true,
+          speed: 0.5,
+          straight: false,
         },
-        resize: {
-          enable: true,
+        number: {
+          density: {
+            enable: true,
+            width: 1920,
+            height: 1080,
+          },
+          value: isMobile ? 30 : 60,
         },
-      },
-      modes: {
-        repulse: {
-          distance: 100,
-          duration: 0.4,
+        opacity: {
+          value: {
+            min: 0.4,
+            max: 0.7,
+          },
+          animation: {
+            enable: true,
+            speed: 0.5,
+            sync: false,
+          },
         },
-      },
-    },
-    particles: {
-      color: {
-        value: ["#05d9e8", "#ff2a6d"],
-      },
-      links: {
-        color: "#05d9e8",
-        distance: 150,
-        enable: true,
-        opacity: 0.2,
-        width: 1,
-      },
-      move: {
-        direction: "none",
-        enable: true,
-        outModes: {
-          default: "bounce",
+        shape: {
+          type: "circle",
         },
-        random: true,
-        speed: 1,
-        straight: false,
-      },
-      number: {
-        density: {
-          enable: true,
-          width: 1920,
-          height: 1080,
-        },
-        value: 60,
-      },
-      opacity: {
-        value: { min: 0.3, max: 0.7 },
-        animation: {
-          enable: true,
-          speed: 1,
-          sync: false,
+        size: {
+          value: {
+            min: 2,
+            max: 4,
+          },
         },
       },
-      shape: {
-        type: "circle",
-      },
-      size: {
-        value: { min: 1, max: 3 },
-      },
-    },
-    detectRetina: true,
-  };
+      detectRetina: true,
+    }),
+    [isMobile]
+  );
 
-  if (!init) return null;
+  const particlesLoaded = useCallback(async () => {
+    // Callback when particles are loaded (optional)
+  }, []);
+
+  // If device is very small, show solid gradient background instead
+  if (isVerySmall) {
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          background: "linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 100%)",
+          zIndex: -1,
+        }}
+      />
+    );
+  }
+
+  // Don't render until particles engine is initialized
+  if (!init) {
+    return null;
+  }
 
   return (
     <Particles
       id="tsparticles"
       particlesLoaded={particlesLoaded}
       options={options}
-      className="fixed inset-0 -z-10"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: -1,
+      }}
     />
   );
 };

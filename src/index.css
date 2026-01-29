@@ -245,6 +245,16 @@
   .scrollbar-gaming::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--primary));
   }
+
+  /* Hide Scrollbar */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 /* Swiper Custom Styles */
