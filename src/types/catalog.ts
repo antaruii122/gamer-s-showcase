@@ -5,6 +5,7 @@ export interface Product {
   descripcion?: string;
   specs: Record<string, string>;
   image?: string;
+  images?: string[]; // Support for multiple images: [Main, Portrait, Square1, Square2...]
 }
 
 export interface Catalog {

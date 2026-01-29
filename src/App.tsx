@@ -9,6 +9,7 @@ import { CatalogProvider } from "@/contexts/CatalogContext";
 import ProtectedRoute from "@/components/admin/ProtectedRoute";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 
 // Lazy load admin components for better performance
 const LoginPage = lazy(() => import("./components/admin/LoginPage"));
@@ -33,36 +34,39 @@ const App = () => (
                 </div>
               }
             >
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/admin/login" element={<LoginPage />} />
-                <Route
-                  path="/admin/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <AdminDashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/upload"
-                  element={
-                    <ProtectedRoute>
-                      <UploadCatalog />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/edit/:catalogId"
-                  element={
-                    <ProtectedRoute>
-                      <EditCatalog />
-                    </ProtectedRoute>
-                  }
-                />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+
+              <ErrorBoundary>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/admin/login" element={<LoginPage />} />
+                  <Route
+                    path="/admin/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <AdminDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/upload"
+                    element={
+                      <ProtectedRoute>
+                        <UploadCatalog />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/edit/:catalogId"
+                    element={
+                      <ProtectedRoute>
+                        <EditCatalog />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </ErrorBoundary>
             </Suspense>
           </BrowserRouter>
         </TooltipProvider>

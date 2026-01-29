@@ -12,6 +12,8 @@ export interface ColumnMapping {
   modelo: number | null;
   precioFOB: number | null;
   descripcion: number | null;
+  layout: "table" | "vertical";
+  keyRowIndices?: Record<string, number>; // For vertical layout: map "Key Name" -> Row Index
 }
 
 export interface ParseResult {
@@ -93,14 +95,58 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
   });
 };
 
-// Auto-detect column mapping based on common headers
-export const autoDetectColumns = (columns: ParsedColumn[]): ColumnMapping => {
+// Auto-detect column mapping and layout
+export const autoDetectColumns = (columns: ParsedColumn[], rows: any[][]): ColumnMapping => {
   const mapping: ColumnMapping = {
     modelo: null,
     precioFOB: null,
     descripcion: null,
+    layout: "table",
   };
 
+  // 1. Try to detect Standard Table (Horizontal Headers in Row 0)
+  let tableConfidence = 0;
+  columns.forEach((col) => {
+    const header = col.header.toLowerCase();
+    if (header.includes("modelo") || header.includes("sku") || header.includes("item")) tableConfidence += 2;
+    if (header.includes("precio") || header.includes("fob") || header.includes("price") || header.includes("usd")) tableConfidence += 2;
+    if (header.includes("descrip") || header.includes("spec")) tableConfidence += 1;
+  });
+
+  // 2. Try to detect Vertical Spec Sheet (Keys in Column 0)
+  let verticalConfidence = 0;
+  const keyRowIndices: Record<string, number> = {};
+
+  // Scan first column (Column A) for keys
+  rows.forEach((row, rowIndex) => {
+    const cellA = String(row[0] || "").toLowerCase().trim();
+    if (!cellA) return;
+
+    if (cellA.includes("modelo") || cellA === "model") {
+      verticalConfidence += 2;
+      keyRowIndices["modelo"] = rowIndex;
+    }
+    if (cellA.includes("color")) {
+      verticalConfidence += 1;
+      keyRowIndices["color"] = rowIndex;
+    }
+    if ((cellA.includes("precio") || cellA.includes("fob") || cellA.includes("cost")) && !cellA.includes("total")) {
+      verticalConfidence += 2;
+      keyRowIndices["precio"] = rowIndex; // Explicit price row
+    }
+    if (cellA.includes("panel") || cellA.includes("chasis") || cellA.includes("cpu") || cellA.includes("ram") || cellA.includes("peso")) {
+      verticalConfidence += 1;
+    }
+  });
+
+  // Decide Layout
+  if (verticalConfidence > tableConfidence && verticalConfidence >= 2) {
+    mapping.layout = "vertical";
+    mapping.keyRowIndices = keyRowIndices;
+    return mapping;
+  }
+
+  // Fallback to Standard Table detection logic
   columns.forEach((col) => {
     const header = col.header.toLowerCase();
 
@@ -154,41 +200,122 @@ export const convertToProducts = (
 ): Product[] => {
   const products: Product[] = [];
 
-  // Skip header row
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
+  if (mapping.layout === "vertical") {
+    // === VERTICAL PARSING ===
+    // Iterate COLS instead of ROWS. Usually data starts from Col 1 (B)
+    // We assume row 0 might be a main header (e.g. "GAMER CASE"), so we might scan from Col B.
 
-    // Get mapped values
-    const modelo = mapping.modelo !== null ? String(row[mapping.modelo] || "") : "";
-    const precioFOB = mapping.precioFOB !== null ? String(row[mapping.precioFOB] || "") : "";
-    const descripcion = mapping.descripcion !== null ? String(row[mapping.descripcion] || "") : undefined;
+    // Find where the values start. Usually Column 1.
+    // We support multi-column designs.
+    const maxCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
+    const modeloRowIndex = mapping.keyRowIndices?.["modelo"] ?? -1;
 
-    // Skip rows without model
-    if (!modelo.trim()) continue;
-
-    // Build specs from remaining columns
-    const specs: Record<string, string> = {};
-    row.forEach((value, colIndex) => {
-      if (
-        colIndex !== mapping.modelo &&
-        colIndex !== mapping.precioFOB &&
-        colIndex !== mapping.descripcion &&
-        value &&
-        String(value).trim()
-      ) {
-        const header = rows[0][colIndex] || `Campo ${colIndex + 1}`;
-        specs[header] = String(value);
+    // Scan the whole sheet for a floating price if not found in keys
+    let globalPrice = "";
+    if (mapping.keyRowIndices?.["precio"] === undefined) {
+      // Heuristic: Search bottom-right quadrant for money patterns
+      for (let r = rows.length - 1; r >= 0; r--) {
+        for (let c = rows[r].length - 1; c >= 0; c--) {
+          const val = String(rows[r][c] || "");
+          if (val.match(/(?:USD|US\$|\$)\s*[\d,.]+|[\d,.]+\s*(?:USD)/i)) {
+            globalPrice = val;
+            break;
+          }
+        }
+        if (globalPrice) break;
       }
-    });
+    }
 
-    products.push({
-      id: generateId(),
-      modelo: modelo.trim(),
-      precioFOB: formatPrice(precioFOB),
-      descripcion: descripcion?.trim(),
-      specs,
-      image: undefined, // Image extraction logic removed
-    });
+    for (let c = 1; c < maxCols; c++) {
+      // Check if this column has a "Modelo" value (if we found a modelo row)
+      const modeloVal = modeloRowIndex >= 0 ? String(rows[modeloRowIndex][c] || "").trim() : "";
+
+      // If no explicit modelo row, or cell is empty, maybe skip?
+      // But some sheets might have Model in Header (Row 0) and specs below.
+      // Let's rely on finding a value in the 'Modelo' row.
+      if (modeloRowIndex >= 0 && !modeloVal) continue;
+
+      // If we didn't find a "Modelo" row key, we can't really group products cleanly in vertical mode.
+      if (modeloRowIndex === -1 && c === 1) {
+        // Fallback: If no model key, maybe just use Col B as a single product?
+        // Let's assume current column is a product.
+      } else if (modeloRowIndex === -1) {
+        continue;
+      }
+
+      const currentModelo = modeloVal || "Producto Sin Modelo";
+
+      // Get Price
+      let precioVal = globalPrice;
+      if (mapping.keyRowIndices?.["precio"] !== undefined) {
+        precioVal = String(rows[mapping.keyRowIndices["precio"]][c] || "");
+      }
+
+      // Build Specs
+      const specs: Record<string, string> = {};
+      rows.forEach((row, rIndex) => {
+        // Skip Model and Price rows in specs
+        if (rIndex === modeloRowIndex || rIndex === mapping.keyRowIndices?.["precio"]) return;
+
+        const key = String(row[0] || "").trim();
+        const outputVal = String(row[c] || "").trim();
+
+        if (key && outputVal && key.length < 200) { // increased limit for long specs
+          // Clean key
+          const cleanKey = key.replace(":", "").trim();
+          if (cleanKey) {
+            specs[cleanKey] = outputVal;
+          }
+        }
+      });
+
+      products.push({
+        id: generateId(),
+        modelo: currentModelo,
+        precioFOB: formatPrice(precioVal),
+        specs,
+        image: undefined,
+      });
+    }
+
+  } else {
+    // === TABLE PARSING (Legacy) ===
+    // Skip header row
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+
+      // Get mapped values
+      const modelo = mapping.modelo !== null ? String(row[mapping.modelo] || "") : "";
+      const precioFOB = mapping.precioFOB !== null ? String(row[mapping.precioFOB] || "") : "";
+      const descripcion = mapping.descripcion !== null ? String(row[mapping.descripcion] || "") : undefined;
+
+      // Skip rows without model
+      if (!modelo.trim()) continue;
+
+      // Build specs from remaining columns
+      const specs: Record<string, string> = {};
+      row.forEach((value, colIndex) => {
+        if (
+          colIndex !== mapping.modelo &&
+          colIndex !== mapping.precioFOB &&
+          colIndex !== mapping.descripcion &&
+          value &&
+          String(value).trim()
+        ) {
+          const header = rows[0][colIndex] || `Campo ${colIndex + 1}`;
+          specs[header] = String(value);
+        }
+      });
+
+      products.push({
+        id: generateId(),
+        modelo: modelo.trim(),
+        precioFOB: formatPrice(precioFOB),
+        descripcion: descripcion?.trim(),
+        specs,
+        image: undefined,
+      });
+    }
   }
 
   return products;
@@ -196,41 +323,38 @@ export const convertToProducts = (
 
 // Format price to consistent format
 const formatPrice = (price: string): string => {
-  // Return as-is if it's already in the desired format or empty
-  if (!price || price.startsWith("USD ")) return price;
+  if (!price) return "Consultar"; // Default empty price
+
+  // Return as-is if it's already in the desired format
+  if (price.startsWith("USD ")) return price;
 
   let cleaned = price.toString().trim();
 
-  // Remove currency symbols and non-numeric chars except . , -
+  // Handle "USD 38.50" -> 38.50
+  if (cleaned.toUpperCase().startsWith("USD")) {
+    cleaned = cleaned.substring(3).trim();
+  }
+
+  // Remove currency symbols but keep dots/commas
   cleaned = cleaned.replace(/[^0-9.,-]/g, "");
 
   // Heuristic for separators
   if (cleaned.includes(".") && cleaned.includes(",")) {
-    // Both exist
     if (cleaned.lastIndexOf(".") > cleaned.lastIndexOf(",")) {
-      // 1,234.56 -> remove commas
       cleaned = cleaned.replace(/,/g, "");
     } else {
-      // 1.234,56 -> remove dots, replace comma with dot
       cleaned = cleaned.replace(/\./g, "").replace(/,/g, ".");
     }
   } else if (cleaned.includes(",")) {
-    // Only commas
     if ((cleaned.match(/,/g) || []).length > 1) {
-      // Multiple commas: 1,000,000 -> remove
       cleaned = cleaned.replace(/,/g, "");
     } else {
-      // Single comma: 129,99 or 1,000
-      // Assume decimal separator for safety
       cleaned = cleaned.replace(/,/g, ".");
     }
   } else if (cleaned.includes(".")) {
-    // Only dots
     if ((cleaned.match(/\./g) || []).length > 1) {
-      // Multiple dots: 1.000.000 -> remove
       cleaned = cleaned.replace(/\./g, "");
     }
-    // Single dot -> Standard decimal, leave as is
   }
 
   const number = parseFloat(cleaned);
