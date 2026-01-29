@@ -77,11 +77,11 @@ const Index = () => {
                 <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center mx-auto mb-4">
                   <span className="text-3xl">🎮</span>
                 </div>
-                <h2 className="text-xl font-bold text-foreground mb-2">
-                  ¡Bienvenido a Gaming Catalog Pro!
+                <h2 className="text-2xl font-bold text-primary mb-2 text-glow-cyan">
+                  Catalog Coming Soon
                 </h2>
                 <p className="text-muted-foreground mb-4">
-                  Aún no hay productos en el catálogo. Los administradores
+                  El catálogo de productos está en preparación. Los administradores
                   pueden subir catálogos desde Excel.
                 </p>
                 <a href="/admin/login" className="btn-gaming rounded-lg inline-block">
