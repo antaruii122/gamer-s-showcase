@@ -7,6 +7,7 @@ import {
   updateCatalog as updateCatalogInStorage,
   deleteCatalog as deleteCatalogFromStorage,
   addCategory as addCategoryToStorage,
+  deleteCategory as deleteCategoryFromStorage,
   generateId,
 } from "@/utils/localStorage";
 
@@ -19,6 +20,7 @@ interface CatalogContextType {
   updateCatalog: (catalogId: string, updates: Partial<Catalog>) => void;
   deleteCatalog: (catalogId: string) => void;
   addCategory: (category: string) => void;
+  deleteCategory: (category: string) => void;
   getCatalogsByCategory: (category: string) => Catalog[];
   searchProducts: (query: string) => Catalog[];
   isLoading: boolean;
@@ -51,13 +53,13 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
       createdAt: now,
       updatedAt: now,
     };
-    
+
     addCatalogToStorage(newCatalog);
     setState((prev) => ({
       ...prev,
       catalogs: [...prev.catalogs, newCatalog],
     }));
-    
+
     return newCatalog;
   };
 
@@ -91,15 +93,23 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
+  const deleteCategory = (category: string) => {
+    deleteCategoryFromStorage(category);
+    setState((prev) => ({
+      ...prev,
+      categories: prev.categories.filter((c) => c !== category),
+    }));
+  };
+
   const getCatalogsByCategory = (category: string) => {
     return state.catalogs.filter((c) => c.category === category);
   };
 
   const searchProducts = (query: string): Catalog[] => {
     if (!query.trim()) return state.catalogs;
-    
+
     const lowerQuery = query.toLowerCase();
-    
+
     return state.catalogs.map((catalog) => ({
       ...catalog,
       products: catalog.products.filter((product) => {
@@ -124,6 +134,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
         updateCatalog,
         deleteCatalog,
         addCategory,
+        deleteCategory,
         getCatalogsByCategory,
         searchProducts,
         isLoading,
