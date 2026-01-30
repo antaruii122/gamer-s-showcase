@@ -4,14 +4,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCatalog } from "@/contexts/CatalogContext";
 import {
   parseExcelFile,
-  autoDetectColumns,
-  convertToProducts,
   imageToBase64,
   compressImage,
-  ParseResult,
-  ColumnMapping,
 } from "@/utils/excelParser";
-import { Product } from "@/types/catalog";
+import { ProductInsert as Product } from "@/utils/excelParser";
 import {
   Upload,
   ArrowLeft,
@@ -21,7 +17,6 @@ import {
   X,
   Loader2,
 } from "lucide-react";
-import ParticleBackground from "@/components/public/ParticleBackground";
 import { toast } from "sonner";
 import ExcelDataGrid from "./ExcelDataGrid";
 
@@ -42,15 +37,6 @@ const UploadCatalog = () => {
   const [catalogName, setCatalogName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(categories[0] || "");
   const [newCategory, setNewCategory] = useState("");
-
-  // Excel parsing state
-  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
-  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
-    modelo: null,
-    precioFOB: null,
-    descripcion: null,
-    layout: "table",
-  });
 
   // Products state
   const [products, setProducts] = useState<Product[]>([]);
@@ -93,28 +79,21 @@ const UploadCatalog = () => {
 
       const result = await parseExcelFile(file);
 
-      // Validate minimum columns
-      if (result.columns.length < 2) {
-        setError("El archivo debe tener al menos 2 columnas");
+      // Check errors
+      if (result.errors.length > 0 && result.products.length === 0) {
+        setError(result.errors[0] || "Error al procesar archivo");
         setIsLoading(false);
         return;
       }
 
-      setParseResult(result);
-      setUploadedFileName(file.name);
-
-      // Auto-detect columns and convert immediately
-      const autoMapping = autoDetectColumns(result.columns, result.rows);
-      setColumnMapping(autoMapping);
-
-      const convertedProducts = convertToProducts(result.rows, autoMapping);
-
-      if (convertedProducts.length === 0) {
-        setError("No se encontraron productos válidos en el archivo.");
+      if (result.products.length === 0) {
+        setError("No se encontraron productos válidos en el archivo. Asegúrese de tener headers como 'Model', 'Brand', 'Price'.");
+        setIsLoading(false);
         return;
       }
 
-      setProducts(convertedProducts);
+      setUploadedFileName(file.name);
+      setProducts(result.products);
 
       // Set catalog name from file name
       setCatalogName(file.name.replace(/\.(xlsx|xls|csv)$/i, ""));
@@ -122,7 +101,7 @@ const UploadCatalog = () => {
       // Go directly to review/images step
       setCurrentStep("images");
 
-      toast.success(`${convertedProducts.length} productos detectados correctamente`);
+      toast.success(`${result.products.length} productos detectados correctamente`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al procesar archivo");
     } finally {
@@ -147,14 +126,12 @@ const UploadCatalog = () => {
     e.stopPropagation();
   };
 
-  /* Mapping Step Removed - Automatically handled */
-
   /* New Loading State for individual product image uploads */
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
   const [viewMode, setViewMode] = useState<"cards" | "grid">("cards");
 
   const handleImageUpload = async (
-    productId: string,
+    productModel: string,
     file: File
   ) => {
     if (!file) return;
@@ -172,7 +149,7 @@ const UploadCatalog = () => {
       return;
     }
 
-    setUploadingImages(prev => ({ ...prev, [productId]: true }));
+    setUploadingImages(prev => ({ ...prev, [productModel]: true }));
 
     try {
       const base64 = await imageToBase64(file);
@@ -180,27 +157,27 @@ const UploadCatalog = () => {
       const compressed = base64.length > 500 * 1024 * 1.33 ? await compressImage(base64) : base64;
 
       setProducts((prev) =>
-        prev.map((p) => (p.id === productId ? { ...p, image: compressed } : p))
+        prev.map((p) => (p.model === productModel ? { ...p, image_url: compressed } : p))
       );
       toast.success("Imagen actualizada");
     } catch (err) {
       console.error("Error uploading image:", err);
       toast.error("Error al procesar imagen");
     } finally {
-      setUploadingImages(prev => ({ ...prev, [productId]: false }));
+      setUploadingImages(prev => ({ ...prev, [productModel]: false }));
     }
   };
 
-  const handleImageDrop = (productId: string, e: React.DragEvent<HTMLDivElement>) => {
+  const handleImageDrop = (productModel: string, e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     const file = e.dataTransfer.files?.[0];
-    if (file) handleImageUpload(productId, file);
+    if (file) handleImageUpload(productModel, file);
   };
 
-  const handleRemoveImage = (productId: string) => {
+  const handleRemoveImage = (productModel: string) => {
     setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, image: undefined } : p))
+      prev.map((p) => (p.model === productModel ? { ...p, image_url: null } : p))
     );
   };
 
@@ -232,11 +209,10 @@ const UploadCatalog = () => {
         addCategory(newCategory.trim());
       }
 
-      // Save catalog to CatalogContext
       addCatalog({
         name: catalogName.trim(),
         category,
-        products,
+        products: products as any,
       });
 
       // Show success toast
@@ -399,31 +375,31 @@ const UploadCatalog = () => {
 
       {viewMode === "grid" ? (
         <div className="mb-8">
-          <ExcelDataGrid products={products} />
+          <ExcelDataGrid products={products as any} />
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
-          {products.map((product) => (
+          {products.map((product, idx) => (
             <div
-              key={product.id}
+              key={product.model || idx}
               className="glass-card p-4 relative group"
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              onDrop={(e) => handleImageDrop(product.id, e)}
+              onDrop={(e) => handleImageDrop(product.model, e)}
             >
               {/* Image Area */}
               <div className="relative aspect-square mb-3 rounded-lg overflow-hidden bg-muted/30 border-2 border-transparent hover:border-primary/50 transition-colors">
-                {uploadingImages[product.id] ? (
+                {uploadingImages[product.model] ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10">
                     <Loader2 className="w-8 h-8 text-primary animate-spin" />
                     <span className="text-xs text-white mt-2">Procesando...</span>
                   </div>
                 ) : null}
 
-                {product.image ? (
+                {product.image_url ? (
                   <>
                     <img
-                      src={product.image}
-                      alt={product.modelo}
+                      src={product.image_url}
+                      alt={product.model}
                       className="w-full h-full object-contain"
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
@@ -432,12 +408,12 @@ const UploadCatalog = () => {
                         <input
                           type="file"
                           accept="image/jpeg,image/png,image/webp"
-                          onChange={(e) => e.target.files?.[0] && handleImageUpload(product.id, e.target.files[0])}
+                          onChange={(e) => e.target.files?.[0] && handleImageUpload(product.model, e.target.files[0])}
                           className="hidden"
                         />
                       </label>
                       <button
-                        onClick={() => handleRemoveImage(product.id)}
+                        onClick={() => handleRemoveImage(product.model)}
                         className="p-2 rounded-full bg-destructive text-destructive-foreground hover:scale-110 transition-transform"
                         title="Eliminar imagen"
                       >
@@ -457,7 +433,7 @@ const UploadCatalog = () => {
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
-                      onChange={(e) => e.target.files?.[0] && handleImageUpload(product.id, e.target.files[0])}
+                      onChange={(e) => e.target.files?.[0] && handleImageUpload(product.model, e.target.files[0])}
                       className="hidden"
                     />
                   </label>
@@ -465,10 +441,12 @@ const UploadCatalog = () => {
               </div>
 
               {/* Product Info */}
-              <h3 className="font-semibold text-foreground truncate text-sm" title={product.modelo}>
-                {product.modelo}
+              <h3 className="font-semibold text-foreground truncate text-sm" title={product.model}>
+                {product.model}
               </h3>
-              <p className="text-xs text-accent font-medium">{product.precioFOB}</p>
+              <p className="text-xs text-accent font-medium">
+                {product.price !== null ? `$${product.price}` : "Consultar"}
+              </p>
             </div>
           ))}
         </div>
@@ -476,7 +454,7 @@ const UploadCatalog = () => {
 
       <div className="flex justify-between">
         <button
-          onClick={() => setCurrentStep("mapping")}
+          onClick={() => setCurrentStep("upload")}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -524,7 +502,7 @@ const UploadCatalog = () => {
           <div className="flex justify-between p-4 rounded-lg bg-muted/30">
             <span className="text-muted-foreground">Con Imagen:</span>
             <span className="font-semibold text-foreground">
-              {products.filter((p) => p.image).length}
+              {products.filter((p) => p.image_url).length}
             </span>
           </div>
         </div>
