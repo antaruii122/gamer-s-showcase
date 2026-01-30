@@ -6,8 +6,10 @@ import {
   parseExcelFile,
   imageToBase64,
   compressImage,
+  processRows,
 } from "@/utils/excelParser";
 import { ProductInsert as Product } from "@/utils/excelParser";
+import ColumnMapper from "./ColumnMapper";
 import {
   Upload,
   ArrowLeft,
@@ -20,7 +22,7 @@ import {
 import { toast } from "sonner";
 import ExcelDataGrid from "./ExcelDataGrid";
 
-type Step = "upload" | "images" | "review";
+type Step = "upload" | "mapping" | "images" | "review";
 
 const UploadCatalog = () => {
   const navigate = useNavigate();
@@ -37,6 +39,7 @@ const UploadCatalog = () => {
   const [catalogName, setCatalogName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(categories[0] || "");
   const [newCategory, setNewCategory] = useState("");
+  const [rawFileContent, setRawFileContent] = useState<{ headers: string[], rows: any[][] } | null>(null);
 
   // Products state
   const [products, setProducts] = useState<Product[]>([]);
@@ -81,6 +84,19 @@ const UploadCatalog = () => {
 
       // Check errors
       if (result.errors.length > 0 && result.products.length === 0) {
+        if (result.rawRows && result.headers) {
+          // Detection failed, go to mapping
+          setRawFileContent({
+            headers: result.headers,
+            rows: result.rawRows
+          });
+          setCatalogName(file.name.replace(/\.(xlsx|xls|csv)$/i, ""));
+          setUploadedFileName(file.name);
+          setCurrentStep("mapping");
+          toast.info("No se detectaron columnas automáticas. Por favor realiza el mapeo manual.");
+          return;
+        }
+
         setError(result.errors[0] || "Error al procesar archivo");
         setIsLoading(false);
         return;
@@ -179,6 +195,30 @@ const UploadCatalog = () => {
     setProducts((prev) =>
       prev.map((p) => (p.model === productModel ? { ...p, image_url: null } : p))
     );
+  };
+
+  const handleMappingConfirm = (mapping: Record<string, string>) => {
+    if (!rawFileContent) return;
+
+    try {
+      const { products: mappedProducts, errors } = processRows(
+        rawFileContent.rows,
+        rawFileContent.headers,
+        mapping
+      );
+
+      if (mappedProducts.length === 0) {
+        setError("No se pudieron extraer productos con esa configuración");
+        return;
+      }
+
+      setProducts(mappedProducts);
+      setCurrentStep("images");
+      toast.success(`${mappedProducts.length} productos procesados correctamente`);
+    } catch (err) {
+      console.error("Mapping error:", err);
+      setError("Error al procesar el mapeo");
+    }
   };
 
   const handleSaveCatalog = () => {
@@ -327,6 +367,28 @@ const UploadCatalog = () => {
             {error}
           </div>
         )}
+      </div>
+    </div>
+  );
+
+
+  const renderMappingStep = () => (
+    <div className="max-w-5xl mx-auto">
+      <div className="glass-card p-8 border-gradient">
+        <ColumnMapper
+          data={rawFileContent?.rows || []}
+          columnNames={rawFileContent?.headers || []}
+          onConfirm={handleMappingConfirm}
+        />
+        <div className="mt-6 flex justify-start">
+          <button
+            onClick={() => setCurrentStep("upload")}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Cancelar
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -561,26 +623,32 @@ const UploadCatalog = () => {
               Subir Nuevo Catálogo
             </h1>
             <p className="text-sm text-muted-foreground">
-              Paso {currentStep === "upload" ? 1 : currentStep === "images" ? 2 : 3} de 3
+              Paso {currentStep === "upload" ? 1 : currentStep === "mapping" ? 2 : currentStep === "images" ? 2 : 3} de 3
             </p>
           </div>
         </header>
 
         {/* Progress Bar */}
         <div className="flex gap-2 mb-8">
-          {["upload", "images", "review"].map((step, i) => (
-            <div
-              key={step}
-              className={`flex-1 h-2 rounded-full transition-all ${["upload", "images", "review"].indexOf(currentStep) >= i
-                ? "bg-primary glow-cyan"
-                : "bg-muted"
-                }`}
-            />
-          ))}
+          {["upload", "mapping", "images", "review"].map((step, i) => {
+            // Skip displaying mapping dot if we skipped it
+            if (step === "mapping" && currentStep !== "mapping" && !rawFileContent) return null;
+
+            return (
+              <div
+                key={step}
+                className={`flex-1 h-2 rounded-full transition-all ${["upload", "mapping", "images", "review"].indexOf(currentStep) >= i
+                    ? "bg-primary glow-cyan"
+                    : "bg-muted"
+                  }`}
+              />
+            );
+          })}
         </div>
 
         {/* Step Content */}
         {currentStep === "upload" && renderUploadStep()}
+        {currentStep === "mapping" && renderMappingStep()}
         {currentStep === "images" && renderImagesStep()}
         {currentStep === "review" && renderReviewStep()}
       </div>

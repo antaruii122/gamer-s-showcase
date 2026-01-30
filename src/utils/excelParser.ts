@@ -13,6 +13,8 @@ export interface ProductInsert {
 export interface ParseResult {
   products: ProductInsert[];
   errors: string[];
+  headers?: string[];
+  rawRows?: any[][];
 }
 
 // Helper to clean price strings into numbers
@@ -55,6 +57,82 @@ const parsePrice = (value: any): number | null => {
   return isNaN(num) ? null : num;
 };
 
+export const processRows = (
+  rows: any[][],
+  headers: string[],
+  mapping?: Record<string, string>
+): { products: ProductInsert[], errors: string[] } => {
+  const products: ProductInsert[] = [];
+  const errors: string[] = [];
+
+  // Identify Main Columns (Case Insensitive) OR use mapping
+  let modelIdx = -1;
+  let brandIdx = -1;
+  let priceIdx = -1;
+
+  if (mapping) {
+    // Inverse mapping to find which Header corresponds to "modelo"
+    // mapping is { "HeaderName": "fieldKey" }
+    modelIdx = headers.findIndex(h => mapping[h] === "modelo");
+    brandIdx = headers.findIndex(h => mapping[h] === "brand" || mapping[h] === "marca"); // Adjust if mapping values differ
+    priceIdx = headers.findIndex(h => mapping[h] === "precioFOB");
+  } else {
+    // Auto-detect
+    modelIdx = headers.findIndex(h => /model|sku|código|item/i.test(h));
+    brandIdx = headers.findIndex(h => /brand|marca|fabricante/i.test(h));
+    priceIdx = headers.findIndex(h => /price|precio|costo|fob|usd/i.test(h));
+  }
+
+  // Iterate rows
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+
+    // Skip empty rows
+    if (row.length === 0 || !row.some((cell: any) => cell !== undefined && cell !== "")) continue;
+
+    // Required ID/Model check
+    const modelVal = modelIdx !== -1 ? String(row[modelIdx] || "").trim() : "";
+    if (!modelVal) {
+      continue;
+    }
+
+    const brandVal = brandIdx !== -1 ? String(row[brandIdx] || "").trim() : "Generic";
+
+    // Parse Price
+    const rawPrice = priceIdx !== -1 ? row[priceIdx] : null;
+    const priceVal = parsePrice(rawPrice);
+
+    // Build JSONB Specs
+    const specs: Record<string, any> = {};
+
+    headers.forEach((header, colIdx) => {
+      if (!header) return;
+      // Skip mapped columns
+      if (colIdx === modelIdx || colIdx === brandIdx || colIdx === priceIdx) return;
+
+      // If manually ignoring
+      if (mapping && mapping[header] === "ignorar") return;
+
+      const cellVal = row[colIdx];
+      if (cellVal !== undefined && cellVal !== null && cellVal !== "") {
+        // Add to specs
+        specs[header] = cellVal;
+      }
+    });
+
+    products.push({
+      model: modelVal,
+      brand: brandVal,
+      price: priceVal,
+      specs: specs,
+      image_url: null,
+      active: true
+    });
+  }
+
+  return { products, errors };
+};
+
 export const parseExcelFile = async (file: File): Promise<ParseResult> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -80,61 +158,25 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
         }
 
         const headers = rawRows[0].map((h: any) => String(h || "").trim());
-        const products: ProductInsert[] = [];
-        const errors: string[] = [];
 
-        // Identify Main Columns (Case Insensitive)
-        const modelIdx = headers.findIndex(h => /model|sku|código|item/i.test(h));
-        const brandIdx = headers.findIndex(h => /brand|marca|fabricante/i.test(h));
-        const priceIdx = headers.findIndex(h => /price|precio|costo|fob|usd/i.test(h));
+        // Remove header row from data
+        const dataRows = rawRows.slice(1);
 
-        // Iterate rows skipping header
-        for (let i = 1; i < rawRows.length; i++) {
-          const row = rawRows[i];
+        // Try Auto-detect first
+        const { products, errors } = processRows(dataRows, headers);
 
-          // Skip empty rows
-          if (row.length === 0 || !row.some((cell: any) => cell !== undefined && cell !== "")) continue;
-
-          // Required ID/Model check
-          const modelVal = modelIdx !== -1 ? String(row[modelIdx] || "").trim() : "";
-          if (!modelVal) {
-            // Maybe log a warning or just skip lines without model?
-            // errors.push(\`Row \${i + 1}: Missing Model/SKU\`);
-            continue;
-          }
-
-          const brandVal = brandIdx !== -1 ? String(row[brandIdx] || "").trim() : "Generic";
-
-          // Parse Price
-          const rawPrice = priceIdx !== -1 ? row[priceIdx] : null;
-          const priceVal = parsePrice(rawPrice);
-
-          // Build JSONB Specs
-          const specs: Record<string, any> = {};
-
-          headers.forEach((header, colIdx) => {
-            if (!header) return;
-            // Skip mapped columns
-            if (colIdx === modelIdx || colIdx === brandIdx || colIdx === priceIdx) return;
-
-            const cellVal = row[colIdx];
-            if (cellVal !== undefined && cellVal !== null && cellVal !== "") {
-              // Add to specs
-              specs[header] = cellVal;
-            }
-          });
-
-          products.push({
-            model: modelVal,
-            brand: brandVal,
-            price: priceVal,
-            specs: specs,
-            image_url: null, // Image handling is separate if needed, otherwise null
-            active: true
+        if (products.length > 0) {
+          resolve({ products, errors });
+        } else {
+          // Return raw data for manual mapping
+          resolve({
+            products: [],
+            errors: ["No se encontraron productos válidos. Por favor mapea las columnas."],
+            headers,
+            rawRows: dataRows
           });
         }
 
-        resolve({ products, errors });
       } catch (err) {
         reject(err);
       }
