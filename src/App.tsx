@@ -12,10 +12,10 @@ import NotFound from "./pages/NotFound";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 
 // Lazy load admin components for better performance
-const LoginPage = lazy(() => import("./components/admin/LoginPage"));
-const AdminDashboard = lazy(() => import("./components/admin/AdminDashboard"));
-const UploadCatalog = lazy(() => import("./components/admin/UploadCatalog"));
-const EditCatalog = lazy(() => import("./components/admin/EditCatalog"));
+import LoginPage from "./components/admin/LoginPage";
+import AdminDashboard from "./components/admin/AdminDashboard";
+import UploadCatalog from "./components/admin/UploadCatalog";
+import EditCatalog from "./components/admin/EditCatalog";
 
 const queryClient = new QueryClient();
 
