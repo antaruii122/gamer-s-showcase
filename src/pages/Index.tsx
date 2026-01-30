@@ -8,7 +8,7 @@ import ProductCarousel from "@/components/public/ProductCarousel";
 import SearchBar from "@/components/public/SearchBar";
 
 const Index = () => {
-  const { catalogs, selectedCategory, isLoading } = useCatalog();
+  const { catalogs, selectedCategory, setSelectedCategory, isLoading } = useCatalog();
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredProducts = useMemo(() => {
@@ -62,7 +62,7 @@ const Index = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col">
         {/* Category Navigation */}
-        <CategoryNav />
+        <CategoryNav activeCategory={selectedCategory || ""} onCategoryChange={setSelectedCategory} />
 
         {/* Search Bar */}
         <div className="px-4 py-4">

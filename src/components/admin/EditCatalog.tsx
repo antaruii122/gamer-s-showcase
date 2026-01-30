@@ -311,6 +311,14 @@ const EditCatalog = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 rounded-lg text-primary border border-primary/30 hover:bg-primary/10 transition-colors flex items-center gap-2"
+            >
+              👁️ Ver Catálogo Público
+            </a>
             <button
               onClick={() => navigate("/admin/dashboard")}
               className="px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors bg-transparent border border-transparent hover:border-border"
